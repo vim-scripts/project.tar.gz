@@ -1,8 +1,8 @@
 "=============================================================================
 " File:        project.vim
 " Author:      Aric Blumer (Aric.Blumer@marconi.com)
-" Last Change: Wed 03 Oct 2001 12:55:29 PM EDT
-" Version:     0.5
+" Last Change: Thu 04 Oct 2001 11:58:04 AM EDT
+" Version:     1.0pre2
 "=============================================================================
 " See documentation in accompanying help file
 
@@ -116,6 +116,12 @@ function! s:Project(filename) " <<<
         highlight def link projectFilterError  Error
     endif
     ">>>------------------------------------------------------------------
+    " s:IsAbsolutePath(path) <<<
+    "   Returns true if filename has an absolute path.
+    function! s:IsAbsolutePath(path)
+        return a:path[0] == '/' || a:path[0] == '~' || a:path[0] == '\\' || a:path[1] == ':'
+    endfunction
+    " >>>
     " s:DoSetupAndSplit() <<<
     "   Call DoSetup to ensure the settings are correct.  Split to the next
     "   file.
@@ -151,7 +157,7 @@ function! s:Project(filename) " <<<
             silent! normal! [z
             let parent_infoline = s:RecursivelyConstructDirectives()
             let parent_home = substitute(parent_infoline, '^[^=]*=\(\f\+\).*', '\1', '')
-            let parent_c_d = substitute(parent_infoline, '.*CD=\(\f\+\).*', '\1', '')
+            let parent_c_d = substitute(parent_infoline, '.*\<CD=\(\f\+\).*', '\1', '')
             if strlen(parent_c_d) == strlen(parent_infoline)
                 let parent_c_d = ""
             endif
@@ -188,7 +194,7 @@ function! s:Project(filename) " <<<
             endif
             if foldlevel(foldlineno) == 1
                 " Top fold
-                if (home[0] != '/') && (home[0] != '~') && (home[0] != '\\') && (home[1] != ':')
+                if !s:IsAbsolutePath(home)
                     call confirm('Outermost Project Fold must have absolute path!', "&OK", 1)
                     let home = '~'  " Some 'reasonable' value
                 endif
@@ -212,14 +218,14 @@ function! s:Project(filename) " <<<
             endif
             if foldlevel(foldlineno) == 1
                 " Top fold
-                if (c_d[0] != '/') && (c_d[0] != '~') && (c_d[0] != '\\') && (c_d[1] != ':')
+                if !s:IsAbsolutePath(c_d)
                     call confirm('Outermost Project Fold must have absolute CD path!', "&OK", 1)
                     let c_d = '.'  " Some 'reasonable' value
                 endif
             endif
         endif
         if strlen(c_d) != 0
-            if (c_d[0] == '/') || (c_d[0] == '~') || (strlen(parent_c_d) == 0)
+            if s:IsAbsolutePath(c_d) || (strlen(parent_c_d) == 0)
                 let parent_c_d=c_d
             else
                 let parent_c_d=parent_c_d.'/'.c_d
@@ -231,7 +237,7 @@ function! s:Project(filename) " <<<
         if strlen(scriptin) == strlen(infoline)
             let scriptin = ""
         else
-            if scriptin[0] != '/' && scriptin[0] != '~' && scriptin[0] != '\\' && scriptin[1] != ':'
+            if !s:IsAbsolutePath(scriptin)
                 let scriptin=parent_home.'/'.scriptin
             endif
             let parent_scriptin = scriptin
@@ -242,7 +248,7 @@ function! s:Project(filename) " <<<
         if strlen(scriptout) == strlen(infoline)
             let scriptout = ""
         else
-            if scriptout[0] != '/' && scriptout[0] != '~' && scriptout[0] != '\\' && scriptout[1] != ':'
+            if !s:IsAbsolutePath(scriptout)
                 let scriptout=parent_home.'/'.scriptout
             endif
             let parent_scriptout = scriptout
@@ -313,7 +319,7 @@ function! s:Project(filename) " <<<
         let cd_cmd = b:proj_cd_cmd
         call s:DoSetupAndSplit()
         " If it is an absolute path, don't prepend home
-        if fname[0] != '/' && fname[0] != '~' && fname[0] != '\\' && fname[1] != ':'
+        if !s:IsAbsolutePath(fname)
             let fname=home.fname
         endif
         if bufnr(fname) == -1
@@ -329,7 +335,7 @@ function! s:Project(filename) " <<<
         endif
         " Extract any CD information
         if infoline =~ 'CD='
-            let c_d = substitute(infoline, '.*CD=\(\f\+\).*', '\1', '')
+            let c_d = substitute(infoline, '.*\<CD=\(\f\+\).*', '\1', '')
             if match(g:proj_flags, '\CL') != -1
                 call s:SetupAutoCommand(c_d)
             endif
@@ -347,7 +353,7 @@ function! s:Project(filename) " <<<
         if infoline =~ '\<in='
             let scriptin = substitute(infoline, '.*\<in=\(\f\+\).*', '\1', '')
             if strlen(scriptin) != strlen(infoline)
-                if scriptin[0] != '/' && scriptin[0] != '~' && scriptin[0] != '\\' && scriptin[1] != ':'
+                if !s:IsAbsolutePath(scriptin)
                     let scriptin=home.'/'.scriptin
                 endif
                 if !filereadable(glob(scriptin))
@@ -361,7 +367,7 @@ function! s:Project(filename) " <<<
         if infoline =~ '\<out='
             let scriptout = substitute(infoline, '.*\<out=\(\f\+\).*', '\1', '')
             if strlen(scriptout) != strlen(infoline)
-                if scriptout[0] != '/' && scriptout[0] != '~' && scriptout[0] != '\\' && scriptout[1] != ':'
+                if !s:IsAbsolutePath(scriptout)
                     let scriptout=home.'/'.scriptout
                 endif
                 if !filereadable(glob(scriptout))
@@ -513,7 +519,7 @@ function! s:Project(filename) " <<<
             endif
             normal! `k
 
-            if !(dir[0] != '/' && dir[0] != '~' && dir[0] != '\\')
+            if !s:IsAbsolutePath(dir)
                 " It is not a relative path  Try to make it relative
                 " Recurse the hierarchy
                 let hend=matchend(glob(dir), '\C'.glob(home))
@@ -722,7 +728,7 @@ function! s:Project(filename) " <<<
         if !exists("b:proj_has_autocommand")
             let b:proj_cwd_save = getcwd()
             let b:proj_has_autocommand = 1
-            let bufname=substitute(bufname('%'), '\\', '/', 'g')
+            let bufname=substitute(expand('%:p', 0), '\\', '/', 'g')
             exec 'au BufEnter '.bufname.' let b:proj_cwd_save=getcwd() | cd '.a:cwd
             exec 'au BufLeave '.bufname.' exec "cd ".b:proj_cwd_save'
         endif
@@ -733,7 +739,7 @@ function! s:Project(filename) " <<<
     function! s:SetupScriptAutoCommand(inout, script)
         if !exists("b:proj_has_".a:inout)
             let b:proj_has_{a:inout} = 1
-            exec 'au '.a:inout.' '.substitute(bufname('%'), '\\', '/', 'g').' source '.a:script
+            exec 'au '.a:inout.' '.substitute(expand('%:p', 0), '\\', '/', 'g').' source '.a:script
         endif
     endfunction
     " >>>
@@ -819,7 +825,7 @@ function! s:Project(filename) " <<<
         " Autocommands <<<
         " Autocommands to clean up if we do a buffer wipe
         " These don't work unless we substitute \ for / for Windows
-        let bufname=substitute(bufname('%'), '\\', '/', 'g')
+        let bufname=substitute(expand('%:p', 0), '\\', '/', 'g')
         exec 'au BufWipeout '.bufname.' au! * '.bufname
         exec 'au BufWipeout '.bufname.' unlet g:proj_running'
         " Autocommands to keep the window the specified size

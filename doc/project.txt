@@ -1,6 +1,6 @@
 *project.txt*	Plugin for navigating multiple projects with multiple sources
 		For Vim version 6.0.
-		Last Change: Wed 03 Oct 2001 11:30:52 AM EDT
+		Last Change: Fri 05 Oct 2001 09:44:55 AM EDT
 	
 
 				By Aric Blumer
@@ -106,7 +106,7 @@ in: >
 out: >
 	" Remove compiler from $PATH
 	if $PATH =~ '/path/to/my/compiler'
-		let $PATH=substitute($PATH, '/path/to/my/compiler', '', 'g')
+		let $PATH=substitute($PATH, ':/path/to/my/compiler', '', 'g')
 	endif
 
 Then you can use :make with the proper environment depending on what file you
@@ -389,6 +389,7 @@ THANKS
 	Plugin development:
 
 		Tomas Zellerin
+		Lawrence Kesteloot
 
 
  vim:ts=8 sw=8 noexpandtab tw=78 ft=help:
