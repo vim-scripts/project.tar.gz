@@ -1,8 +1,8 @@
 "=============================================================================
 " File:        project.vim
 " Author:      Aric Blumer (Aric.Blumer@marconi.com)
-" Last Change: Thu 04 Oct 2001 11:58:04 AM EDT
-" Version:     1.0pre2
+" Last Change: Tue 09 Oct 2001 03:20:45 PM EDT
+" Version:     1.0pre3
 "=============================================================================
 " See documentation in accompanying help file
 
@@ -86,16 +86,16 @@ function! s:Project(filename) " <<<
         syntax match projectDescription    '\S[^=]\{-}\S='he=e-1,me=e-1 contained nextgroup=projectDirectory,projectWhiteError
         syntax match projectDescription    '{\|}'
         syntax match projectDirectory      '=\f\+'                      contained
-        syntax match projectScriptinout    '\<in='he=e-1,me=e-1           nextgroup=projectDirectory,projectWhiteError
-        syntax match projectScriptinout    '\<out='he=e-1,me=e-1          nextgroup=projectDirectory,projectWhiteError
+        syntax match projectScriptinout    '\<in='he=e-1,me=e-1         nextgroup=projectDirectory,projectWhiteError
+        syntax match projectScriptinout    '\<out='he=e-1,me=e-1        nextgroup=projectDirectory,projectWhiteError
         syntax match projectComment        '#.*'
-        syntax match projectCD             '\<CD\s*=\s*\f\+'              contains=projectDescription,projectWhiteError
-        syntax match projectFilterEntry    '\<filter\s*=.*"'              contains=projectWhiteError,projectFilterError,projectFilter,projectFilterRegexp
-        syntax match projectFilter         '\<filter='he=e-1,me=e-1       contained nextgroup=projectFilterRegexp,projectFilterError,projectWhiteError
-        syntax match projectFlagsEntry     '\<flags\s*=\( \|[^ ]*\)'      contains=projectFlags,projectWhiteError
-        syntax match projectFlags          '\<flags'                      contained nextgroup=projectFlagsValues,projectWhiteError
+        syntax match projectCD             '\<CD\s*=\s*\f\+'            contains=projectDescription,projectWhiteError
+        syntax match projectFilterEntry    '\<filter\s*=.*"'            contains=projectWhiteError,projectFilterError,projectFilter,projectFilterRegexp
+        syntax match projectFilter         '\<filter='he=e-1,me=e-1     contained nextgroup=projectFilterRegexp,projectFilterError,projectWhiteError
+        syntax match projectFlagsEntry     '\<flags\s*=\( \|[^ ]*\)'    contains=projectFlags,projectWhiteError
+        syntax match projectFlags          '\<flags'                    contained nextgroup=projectFlagsValues,projectWhiteError
         syntax match projectFlagsValues    '=[^ ]* 'me=e-1              contained contains=projectFlagsError
-        syntax match projectFlagsError     '[^rtT= ]\+'                 contained
+        syntax match projectFlagsError     '[^rtTsS= ]\+'               contained
         syntax match projectWhiteError     '=\s\+'hs=s+1                contained
         syntax match projectWhiteError     '\s\+='he=e-1                contained
         syntax match projectFilterError    '=[^"]'hs=s+1                contained
@@ -116,6 +116,54 @@ function! s:Project(filename) " <<<
         highlight def link projectFilterError  Error
     endif
     ">>>------------------------------------------------------------------
+    " s:SortR(start, end) <<<
+    " Sort lines.  SortR() is called recursively.
+    "  from ":help eval-examples" by Robert Webb, slightly modified
+    function! s:SortR(start, end)
+        if (a:start >= a:end)
+            return
+        endif
+        let partition = a:start - 1
+        let middle = partition
+        let partStr = getline((a:start + a:end) / 2)
+        let i = a:start
+        while (i <= a:end)
+            let str = getline(i)
+            if str < partStr
+                let result = -1
+            elseif str > partStr
+                let result = 1
+            else
+                let result = 0
+            endif
+            if (result <= 0)
+                " Need to put it before the partition.  Swap lines i and partition.
+                let partition = partition + 1
+                if (result == 0)
+                    let middle = partition
+                endif
+                if (i != partition)
+                    let str2 = getline(partition)
+                    call setline(i, str2)
+                    call setline(partition, str)
+                endif
+            endif
+            let i = i + 1
+        endwhile
+
+        " Now we have a pointer to the "middle" element, as far as partitioning
+        " goes, which could be anywhere before the partition.  Make sure it is at
+        " the end of the partition.
+        if (middle != partition)
+            let str = getline(middle)
+            let str2 = getline(partition)
+            call setline(middle, str2)
+            call setline(partition, str)
+        endif
+        call s:SortR(a:start, partition - 1)
+        call s:SortR(partition + 1, a:end)
+    endfunc
+    ">>>
     " s:IsAbsolutePath(path) <<<
     "   Returns true if filename has an absolute path.
     function! s:IsAbsolutePath(path)
@@ -393,7 +441,7 @@ function! s:Project(filename) " <<<
     endfunction
     ">>>------------------------------------------------------------------
     " s:VimDirListing(filter, padding) <<<
-    function! s:VimDirListing(filter, padding)
+    function! s:VimDirListing(filter, padding, sort)
         let end = 0
         let files=''
         let filter = a:filter
@@ -416,6 +464,7 @@ function! s:Project(filename) " <<<
         " weed out the directories.
         put =files
         let line=getline('.')
+        let startline=line('.')
         " This 'while' loop looks at each directory entry and deletes the line
         " to the black hole register if it is a directory name.  When we reach
         " a fold boundary marked by { or }, exit the loop
@@ -433,12 +482,15 @@ function! s:Project(filename) " <<<
             " Get the next line
             let line=getline('.')
         endwhile
+        if a:sort
+            call s:SortR(startline, line('.')-1)
+        endif
     endfunction
     ">>>------------------------------------------------------------------
     " s:DoEntryFromDir() <<<
     "   Places a fold in the buffer consisting of files from the given
     "   directory. The indention is controlled by foldlev.
-    function! s:DoEntryFromDir(line, name, absolute_dir, dir, c_d, filter_directive, filter, foldlev)
+    function! s:DoEntryFromDir(line, name, absolute_dir, dir, c_d, filter_directive, filter, foldlev, sort)
         " Calculate the number of spaces for the indent
         let spaces=strpart('                                     ', 0, a:foldlev)
         " Put in the fold with two append()
@@ -459,7 +511,7 @@ function! s:Project(filename) " <<<
         " Change to the dir specified
         exec 'cd '.a:absolute_dir
         " Get the files from Vim glob()
-        call s:VimDirListing(a:filter, spaces.' ')
+        call s:VimDirListing(a:filter, spaces.' ', a:sort)
         " Go to the top of the fold and close it
         normal! [zzc
         " Restore the previous directory. This can be simplified with a :cd -
@@ -558,7 +610,7 @@ function! s:Project(filename) " <<<
             let foldlev = foldlev - 1
         endif
         " Do the work
-        call s:DoEntryFromDir(line, name, home.dir, dir, c_d, filter_directive, filter, foldlev)
+        call s:DoEntryFromDir(line, name, home.dir, dir, c_d, filter_directive, filter, foldlev, 0)
         " Restore the cursor position
         normal! `k
     endfunction
@@ -612,11 +664,22 @@ function! s:Project(filename) " <<<
             endif
             " Extract the flags
             let flags = substitute(immediate_infoline, '.*\<flags=\([^ {]*\).*', '\1', '')
+            if match(g:proj_flags, '\CS') != -1
+                let sort = 1
+            else
+                let sort = 0
+            endif
             if strlen(flags) != strlen(immediate_infoline)
                 if match(flags, '\Cr') != -1
                     " If the flags do not contain r (refresh), then treat it just
                     " like a fold
                     let just_a_fold = 1
+                endif
+                if match(flags, '\CS') != -1
+                    let sort = 1
+                endif
+                if match(flags, '\Cs') != -1
+                    let sort = 0
                 endif
             else
                 let flags=''
@@ -670,7 +733,7 @@ function! s:Project(filename) " <<<
                 let cwd=getcwd()
                 let spaces=strpart('                                     ', 0, foldlev)
                 exec 'cd '.dir
-                call s:VimDirListing(filter, spaces)
+                call s:VimDirListing(filter, spaces, sort)
                 exec 'cd '.cwd
             endif
         endif
@@ -775,7 +838,44 @@ function! s:Project(filename) " <<<
         echo retval
     endfunction
     ">>>------------------------------------------------------------------
-    if !exists("g:proj_running") || g:proj_running == 0
+    " s:Spawn(number) <<<
+    "   Spawn an external command on the file
+    function! s:Spawn(number)
+        if exists("g:proj_run".a:number)
+            let fname=getline('.')
+            if fname!~'{\|}'
+                normal! mkHml`k
+                let fname=substitute(fname, '#.*', '', '')
+                let fname=substitute(fname, '^\s*\(.*\)', '\1', '')
+                if strlen(fname) == 0
+                    " The line is blank. Do nothing.
+                    return
+                endif
+                silent! normal! [z
+                let parent_infoline = s:RecursivelyConstructDirectives()
+                let parent_home = substitute(parent_infoline, '^[^=]*=\(\f\+\).*', '\1', '')
+                exec substitute(g:proj_run{a:number}, '%s', parent_home.'/'.fname, 'g')
+                normal! `lzt`k
+            endif
+        endif
+    endfunction
+    ">>>------------------------------------------------------------------
+    " s:ListSpawn() <<<
+    "   List external commands
+    function! s:ListSpawn()
+        let number = 1
+        while number < 10
+            if exists("g:proj_run".number)
+                echohl LineNr | echo number.':' | echohl None | echon ' '.g:proj_run{number}
+            else
+                echohl LineNr | echo number.':' | echohl None
+            endif
+            let number=number + 1
+        endwhile
+    endfunction
+    ">>>------------------------------------------------------------------
+
+    if !exists("g:proj_running")
         " Mappings <<<
         nnoremap <buffer> <silent> <Return>   \|:call <SID>DoFoldOrOpenEntry('', 'e', 'bu')<CR>
         nnoremap <buffer> <silent> <S-Return> \|:call <SID>DoFoldOrOpenEntry('', 'sp', 'sbu')<CR>
@@ -802,6 +902,16 @@ function! s:Project(filename) " <<<
         nnoremap <buffer> <silent> <C-Down> \|:silent call <SID>MoveDown()<CR>
         nmap     <buffer> <silent> <Leader><Up> <C-Up>
         nmap     <buffer> <silent> <Leader><Down> <C-Down>
+        nmap     <buffer>          <Leader>1 \|:call <SID>Spawn(1)<CR>
+        nmap     <buffer>          <Leader>2 \|:call <SID>Spawn(2)<CR>
+        nmap     <buffer>          <Leader>3 \|:call <SID>Spawn(3)<CR>
+        nmap     <buffer>          <Leader>4 \|:call <SID>Spawn(4)<CR>
+        nmap     <buffer>          <Leader>5 \|:call <SID>Spawn(5)<CR>
+        nmap     <buffer>          <Leader>6 \|:call <SID>Spawn(6)<CR>
+        nmap     <buffer>          <Leader>7 \|:call <SID>Spawn(7)<CR>
+        nmap     <buffer>          <Leader>8 \|:call <SID>Spawn(8)<CR>
+        nmap     <buffer>          <Leader>9 \|:call <SID>Spawn(9)<CR>
+        nmap     <buffer>          <Leader>0 \|:call <SID>ListSpawn()<CR>
 
         nnoremap <buffer> <silent> <Leader>c :call <SID>CreateEntriesFromDir()<CR>
         nnoremap <buffer> <silent> <Leader>r :call <SID>RefreshEntriesFromDir(0)<CR>
@@ -832,12 +942,11 @@ function! s:Project(filename) " <<<
         exec 'au WinEnter,WinLeave '.bufname.' call s:DoEnsurePlacementSize_au()'
         exec 'au BufWinEnter '.bufname.' call s:DoSetupAndSplit_au()'
         " >>>
-    endif
-    if !exists("g:proj_running")
+        "
         setlocal buflisted
-        let g:proj_running = bufnr('.')
+        let g:proj_running = bufnr(bufname)
         if g:proj_running == -1
-            call confirm('Project internal error. Please Enter :Project again.', "&OK", 1)
+            call confirm('Project/Vim error. Please Enter :Project again and report this bug.', "&OK", 1)
             unlet g:proj_running
         endif
         setlocal nobuflisted

@@ -1,6 +1,6 @@
 *project.txt*	Plugin for navigating multiple projects with multiple sources
 		For Vim version 6.0.
-		Last Change: Fri 05 Oct 2001 09:44:55 AM EDT
+		Last Change: Tue 09 Oct 2001 01:58:29 PM EDT
 	
 
 				By Aric Blumer
@@ -91,19 +91,19 @@ directory is not changed.  There can be no space on either side of the =.  The
 value of CD can also be a relative path from a parent's CD.  See the
 |project-inheritance| example below.
 
-in= and out= provide the means to run arbitrary Vim scripts that whenever you
-enter or leave the buffer (see the |BufEnter| and |BufLeave| autocommand
-events).  The idea is to have a Vim script that sets up or tears down the
-environment for the project like this:
+in= and out= provide the means to run arbitrary Vim scripts whenever you enter
+or leave the buffer (see the |BufEnter| and |BufLeave| autocommand events).
+The idea is to have a Vim script that sets up or tears down the environment
+for the project like this:
 
-in: >
+in.vim: >
 	let $PROJECT_HOME='~/my_project'
 	" Put the compiler in $PATH
 	if $PATH !~ '/path/to/my/compiler'
 		let $PATH=$PATH.':/path/to/my/compiler'
 	endif
 
-out: >
+out.vim: >
 	" Remove compiler from $PATH
 	if $PATH =~ '/path/to/my/compiler'
 		let $PATH=substitute($PATH, ':/path/to/my/compiler', '', 'g')
@@ -135,6 +135,10 @@ characters:
 
 	t	Turn off top gravity.  Forces folds to the bottom of the
 	        current fold when refreshing.
+
+	S	Turn on sorting for refresh and create.
+
+	s	Turn off sorting for refresh and create.
 
 
 Flags are not inherited by Subprojects.
@@ -171,7 +175,8 @@ Thus, the example above is exactly equivalent to this:
 	}
 
 (For a real project, Child1 would not want to inherit its parent's filter, but
-this example shows the concept.)
+this example shows the concept.)  You can always enter \i to display what the
+cursor's project inherits.
 
 
 ==============================================================================
@@ -259,6 +264,12 @@ MAPPINGS						    *project-mappings*
 	debugging your relative path and inherited parameters for manually
 	entered projects.
 
+\1 - \9
+	Run the command specified in g:proj_run{x} where {x} is the number
+	of the key.  See the documentation of g:proj_run1 below.
+
+\0	Display the commands that are defined for \1 through \9.
+
 Note that the Project Plugin remaps :help because the Help Window and the
 Project Window get into a fight over placement. The mapping avoids the
 problem.
@@ -310,6 +321,8 @@ g:proj_flags
 	s	When present, the Project Plugin will use syntax highlighting
 		in the Project Window.
 
+	S	Turn on sorting for refresh and create.
+
 	t	When present, toggle the size of the window rather than just
 		increase the size when pressing <space> or right-clicking.
 		See the entry for <RightMouse> in |project-mappings|.
@@ -317,6 +330,20 @@ g:proj_flags
 	T	When present, put Subproject folds at the top of the fold when
 		refreshing.
 
+g:proj_run1 ...  g:proj_run9
+		Contains a Vim command to execute on the file. The characters
+		%s are replaced with the absolute path of the filename.  See
+		the mappings of \1 to \9 above.
+
+		For example, gvim will be launched on the file under the
+		cursor when you enter \3 if the following is in your vimrc
+		file: >
+		 let g:proj_run1='silent !gvim %s'
+<		Here are a couple other examples: >
+		 let g:proj_run2='p4 edit %s'
+		 let g:proj_run3='p4 add %s'
+		 let g:proj_run4='ec "Viewing %s"|sil !xterm -e less %s &'
+<
 
 ==============================================================================
 PROJECT EXAMPLE FILE					     *project-example*
