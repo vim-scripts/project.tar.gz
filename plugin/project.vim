@@ -1,8 +1,8 @@
 "=============================================================================
 " File:        project.vim
 " Author:      Aric Blumer (Aric.Blumer at marconi.com)
-" Last Change: Tue 01 Oct 2002 12:00:06 PM EDT
-" Version:     1.2.1       ©2002
+" Last Change: Thu 17 Oct 2002 02:39:48 PM EDT
+" Version:     1.3         ©2002
 "=============================================================================
 " See documentation in accompanying help file
 
@@ -33,16 +33,15 @@ function! s:Project(filename) " <<<
     endif
     if !exists('g:proj_flags')
         if has("win32") || has("mac")
-            let g:proj_flags='imst'                " Project default flags
+            let g:proj_flags='imst'             " Project default flags for windows/mac
         else
-            let g:proj_flags='imstb'               " Project default flags
+            let g:proj_flags='imstb'            " Project default flags for everything else
         endif
     endif
     if !exists("g:proj_running") || (bufwinnr(g:proj_running) == -1) " Open the Project Window
         exec 'silent vertical new '.filename
         silent! wincmd H
         exec 'vertical resize '.g:proj_window_width
-        let b:maxwinheight = winheight('.')
     else
         silent! 99wincmd h
         if winbufnr(2) == -1
@@ -73,7 +72,7 @@ function! s:Project(filename) " <<<
     " s:DoSetup() <<<
     "   Ensure everything is set up
     function! s:DoSetup()
-        setlocal foldmethod=marker foldmarker={,} commentstring=%s foldcolumn=0 nonumber noswapfile shiftwidth=1
+        setlocal foldenable foldmethod=marker foldmarker={,} commentstring=%s foldcolumn=0 nonumber noswapfile shiftwidth=1
         setlocal foldtext=ProjFoldText() nobuflisted nowrap
         setlocal winwidth=1
     endfunction ">>>
@@ -162,7 +161,11 @@ function! s:Project(filename) " <<<
         if a:path =~ '^ftp:' || a:path =~ '^rcp:' || a:path =~ '^scp:' || a:path =~ '^http:'
             return 2
         endif
-        let path=expand(a:path) " Expand any environment variables that might be in the path
+        if a:path =~ '\$'
+            let path=expand(a:path) " Expand any environment variables that might be in the path
+        else
+            let path=a:path
+        endif
         if path[0] == '/' || path[0] == '~' || path[0] == '\\' || path[1] == ':'
             return 1
         endif
@@ -241,7 +244,7 @@ function! s:Project(filename) " <<<
         let home=s:GetHome(infoline, parent_home)
         if home != ''
             if (foldlevel(foldlineno) == 1) && !s:IsAbsolutePath(home)
-                call confirm('Outermost Project Fold must have absolute path!', "&OK", 1)
+                call confirm('Outermost Project Fold must have absolute path!  Or perhaps the path does not exist.', "&OK", 1)
                 let home = '~'  " Some 'reasonable' value
             endif
         endif
@@ -249,7 +252,7 @@ function! s:Project(filename) " <<<
         let c_d = s:GetCd(infoline, home)
         if c_d != ''
             if (foldlevel(foldlineno) == 1) && !s:IsAbsolutePath(c_d)
-                call confirm('Outermost Project Fold must have absolute CD path!', "&OK", 1)
+                call confirm('Outermost Project Fold must have absolute CD path!  Or perhaps the path does not exist.', "&OK", 1)
                 let c_d = '.'  " Some 'reasonable' value
             endif
         else
@@ -379,6 +382,16 @@ function! s:Project(filename) " <<<
             normal! za
         else
             call s:OpenEntry(line('.'), a:cmd0, a:cmd1, 0)
+            if (match(g:proj_flags, '\Cc') != -1)
+                let g:proj_mywinnumber = winbufnr(0)
+                wincmd h
+                if(g:proj_running == winbufnr(0))
+                    hide
+                endif
+                if(g:proj_mywinnumber != winbufnr(0))
+                    wincmd p
+                endif
+            endif
         endif
     endfunction ">>>
     " s:VimDirListing(filter, padding, separator, filevariable, filecount, dirvariable, dircount) <<<
@@ -648,6 +661,9 @@ function! s:Project(filename) " <<<
                 let cwd=getcwd()
                 let spaces=strpart('                                               ', 0, foldlev)
                 exec 'cd '.home
+                if match(g:proj_flags, '\Ci') != -1
+                    echon home."\r"
+                endif
                 call s:VimDirListing(filter, spaces, "\n", 'b:files', 'b:filecount', 'b:dirs', 'b:dircount')
                 if b:filecount > 0
                     silent! put =b:files
@@ -749,19 +765,32 @@ function! s:Project(filename) " <<<
             if fname!~'{\|}'
                 let fname=substitute(fname, '\s*#.*', '', '')
                 let fname=substitute(fname, '^\s*\(.*\)\s*', '\1', '')
-                if strlen(fname) == 0
-                    return              " The line is blank. Do nothing.
-                endif
+                if fname == '' | return | endif
                 let parent_infoline = s:RecursivelyConstructDirectives(line('.'))
-                "let home = substitute(parent_infoline, '^[^=]*=\(\(\f\|:\|\\ \)\+\).*', '\1', '')
-                let home=s:GetHome(parent_infoline, '')
-                "let c_d=substitute(parent_infoline, '.*\<CD=\(\(\f\|:\|\\ \)\+\).*', '\1', '')
-                let c_d=s:GetCd(parent_infoline, '')
-                let command=substitute(g:proj_run{a:number}, '%f', escape(home.'/'.fname, '\'), 'g')
+                let home=expand(s:GetHome(parent_infoline, ''))
+                let c_d=expand(s:GetCd(parent_infoline, ''))
+                let command=substitute(g:proj_run{a:number}, '%%', "\010", 'g')
+                let command=substitute(command, '%f', escape(home.'/'.fname, '\'), 'g')
                 let command=substitute(command, '%F', substitute(escape(home.'/'.fname, '\'), ' ', '\\\\ ', 'g'), 'g')
                 let command=substitute(command, '%s', escape(home.'/'.fname, '\'), 'g')
+                let command=substitute(command, '%n', escape(fname, '\'), 'g')
+                let command=substitute(command, '%N', substitute(fname, ' ', '\\\\ ', 'g'), 'g')
                 let command=substitute(command, '%h', escape(home, '\'), 'g')
+                let command=substitute(command, '%H', substitute(escape(home, '\'), ' ', '\\\\ ', 'g'), 'g')
+                if c_d != ''
+                    if c_d == home
+                        let percent_r='.'
+                    else
+                        let percent_r=substitute(home, escape(c_d.'/', '\'), '', 'g')
+                    endif
+                else
+                    let percent_r=home
+                endif
+                let command=substitute(command, '%r', percent_r, 'g')
+                let command=substitute(command, '%R', substitute(percent_r, ' ', '\\\\ ', 'g'), 'g')
                 let command=substitute(command, '%d', escape(c_d, '\'), 'g')
+                let command=substitute(command, '%D', substitute(escape(c_d, '\'), ' ', '\\\\ ', 'g'), 'g')
+                let command=substitute(command, "\010", '%', 'g')
                 exec command
             endif
         endif
@@ -1101,17 +1130,17 @@ function! s:Project(filename) " <<<
         nnoremap <buffer> <silent> <C-Return> \|:call <SID>DoFoldOrOpenEntry('silent! only', 'e')<CR>
         nmap     <buffer> <silent> <LocalLeader>s <S-Return>
         nmap     <buffer> <silent> <LocalLeader>o <C-Return>
-        nmap     <buffer> <silent> <LocalLeader>i :echo <SID>RecursivelyConstructDirectives(line('.'))<CR>
-        nmap     <buffer> <silent> <LocalLeader>I :echo Project_GetFname(line('.'))<CR>
+        nnoremap <buffer> <silent> <LocalLeader>i :echo <SID>RecursivelyConstructDirectives(line('.'))<CR>
+        nnoremap <buffer> <silent> <LocalLeader>I :echo Project_GetFname(line('.'))<CR>
         nmap     <buffer> <silent> <M-CR> <Return><C-W>p
         nmap     <buffer> <silent> <LocalLeader>v <M-CR>
-        nmap     <buffer> <silent> <LocalLeader>l \|:call <SID>LoadAll(0, line('.'))<CR>
-        nmap     <buffer> <silent> <LocalLeader>L \|:call <SID>LoadAll(1, line('.'))<CR>
-        nmap     <buffer> <silent> <LocalLeader>w \|:call <SID>WipeAll(0, line('.'))<CR>
-        nmap     <buffer> <silent> <LocalLeader>W \|:call <SID>WipeAll(1, line('.'))<CR>
-        nmap     <buffer> <silent> <LocalLeader>W \|:call <SID>WipeAll(1, line('.'))<CR>
-        nmap     <buffer> <silent> <LocalLeader>g \|:call <SID>GrepAll(0, line('.'), "")<CR>
-        nmap     <buffer> <silent> <LocalLeader>G \|:call <SID>GrepAll(1, line('.'), "")<CR>
+        nnoremap <buffer> <silent> <LocalLeader>l \|:call <SID>LoadAll(0, line('.'))<CR>
+        nnoremap <buffer> <silent> <LocalLeader>L \|:call <SID>LoadAll(1, line('.'))<CR>
+        nnoremap <buffer> <silent> <LocalLeader>w \|:call <SID>WipeAll(0, line('.'))<CR>
+        nnoremap <buffer> <silent> <LocalLeader>W \|:call <SID>WipeAll(1, line('.'))<CR>
+        nnoremap <buffer> <silent> <LocalLeader>W \|:call <SID>WipeAll(1, line('.'))<CR>
+        nnoremap <buffer> <silent> <LocalLeader>g \|:call <SID>GrepAll(0, line('.'), "")<CR>
+        nnoremap <buffer> <silent> <LocalLeader>G \|:call <SID>GrepAll(1, line('.'), "")<CR>
         nnoremap <buffer> <silent> <2-LeftMouse>   \|:call <SID>DoFoldOrOpenEntry('', 'e')<CR>
         nnoremap <buffer> <silent> <S-2-LeftMouse> \|:call <SID>DoFoldOrOpenEntry('', 'sp')<CR>
         nnoremap <buffer> <silent> <M-2-LeftMouse> <M-CR>
@@ -1130,18 +1159,20 @@ function! s:Project(filename) " <<<
         nmap     <buffer> <silent> <LocalLeader><Down> <C-Down>
         let k=1
         while k < 10
-            exec 'nmap <buffer> <LocalLeader>'.k.'  \|:call <SID>Spawn('.k.')<CR>'
-            exec 'nmap <buffer> <LocalLeader>f'.k.' \|:call <SID>SpawnAll(0, '.k.')<CR>'
-            exec 'nmap <buffer> <LocalLeader>F'.k.' \|:call <SID>SpawnAll(1, '.k.')<CR>'
+            exec 'nnoremap <buffer> <LocalLeader>'.k.'  \|:call <SID>Spawn('.k.')<CR>'
+            exec 'nnoremap <buffer> <LocalLeader>f'.k.' \|:call <SID>SpawnAll(0, '.k.')<CR>'
+            exec 'nnoremap <buffer> <LocalLeader>F'.k.' \|:call <SID>SpawnAll(1, '.k.')<CR>'
             let k=k+1
         endwhile
-        nmap     <buffer>          <LocalLeader>0 \|:call <SID>ListSpawn("")<CR>
-        nmap     <buffer>          <LocalLeader>f0 \|:call <SID>ListSpawn("_fold")<CR>
-        nmap     <buffer>          <LocalLeader>F0 \|:call <SID>ListSpawn("_fold")<CR>
+        nnoremap <buffer>          <LocalLeader>0 \|:call <SID>ListSpawn("")<CR>
+        nnoremap <buffer>          <LocalLeader>f0 \|:call <SID>ListSpawn("_fold")<CR>
+        nnoremap <buffer>          <LocalLeader>F0 \|:call <SID>ListSpawn("_fold")<CR>
         nnoremap <buffer> <silent> <LocalLeader>c :call <SID>CreateEntriesFromDir(0)<CR>
         nnoremap <buffer> <silent> <LocalLeader>C :call <SID>CreateEntriesFromDir(1)<CR>
         nnoremap <buffer> <silent> <LocalLeader>r :call <SID>RefreshEntriesFromDir(0)<CR>
         nnoremap <buffer> <silent> <LocalLeader>R :call <SID>RefreshEntriesFromDir(1)<CR>
+        " For Windows users: same as \R
+        nnoremap <buffer> <silent>           <F5> :call <SID>RefreshEntriesFromDir(1)<CR>
         nnoremap <buffer> <silent> <LocalLeader>e :call <SID>OpenEntry(line('.'), '', '', 0)<CR>
         nnoremap <buffer> <silent> <LocalLeader>E :call <SID>OpenEntry(line('.'), '', 'e', 1)<CR>
         " The :help command stomps on the Project Window.  Try to avoid that.
@@ -1185,6 +1216,29 @@ endfunction " >>>
 if !exists(':Project')
     command -nargs=? -complete=file Project call <SID>Project('<args>')
 endif
+" Toggle Mapping
+if !exists("*<SID>DoToggleProject()") "<<<
+    function! s:DoToggleProject()
+        if !exists('g:proj_running') || bufwinnr(g:proj_running) == -1
+            Project
+        else
+            let g:proj_mywindow = winnr()
+            Project
+            hide
+            if(winnr() != g:proj_mywindow)
+                wincmd p
+            endif
+            unlet g:proj_mywindow
+        endif
+    endfunction
+endif ">>>
+nnoremap <script> <Plug>ToggleProject :call <SID>DoToggleProject()<CR>
+if exists('g:proj_flags') && (match(g:proj_flags, '\Cg') != -1)
+    if !hasmapto('<Plug>ToggleProject')
+        nmap <silent> <F12> <Plug>ToggleProject
+    endif
+endif
+
 finish
 
 " vim600: set foldmethod=marker foldmarker=<<<,>>> foldlevel=1:

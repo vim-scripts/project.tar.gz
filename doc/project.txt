@@ -1,6 +1,6 @@
 *project.txt*	Plugin for managing multiple projects with multiple sources
 		For Vim version 6.0.
-		Last Change: Mon 30 Sep 2002 11:24:07 AM EDT
+		Last Change: Wed 16 Oct 2002 01:10:25 PM EDT
 	
 
 				By Aric Blumer
@@ -12,6 +12,7 @@
 		Commands...................|project-invoking|
 		Inheritiance............|project-inheritance|
 		Mappings...................|project-mappings|
+		Adding Mappings.....|project-adding-mappings|
 		Settings...................|project-settings|
 		Example File................|project-example|
 		Tips...........................|project-tips|
@@ -240,9 +241,9 @@ Map	Action ~
 	using an indent of one space for every foldlevel in the hierarchy.
 
 	You may place a "# pragma keep" (without the quotes) at the end of a
-	line and the file entry will not be removed when you refresh.  This is
-	useful, for example, when you have . as an entry so you can easily
-	browse the directory.
+	line, and the file entry on that line will not be removed when you
+	refresh.  This is useful, for example, when you have . as an entry so
+	you can easily browse the directory.
 	
 	Note that this mapping is actually <LocalLeader>r, and the default of
 	|<LocalLeader>| is \.
@@ -362,8 +363,8 @@ Map	Action ~
 	any key to stop.
 
 \w	Wipe all the files in the current Project level from Vim. (If files
-	are modified, they will be saved first.)  While files are being
-	loaded, you may press any key to stop.
+	are modified, they will be saved first.)  While files are being wiped,
+	you may press any key to stop.
 
 \W	Wipe all the files in the current Project and all Subprojects from
 	Vim. (If files are modified, they will be saved first.)  While files
@@ -380,12 +381,19 @@ Map	Action ~
 \E	Explore (using |file-explorer|) the directory of the project the
 	cursor is in.  Does not work with netrw.
 
+<F12>	When the 'g' flag is present in g:proj_flags (see |project-flags|)
+	this key toggles the Project Window open and closed. You may remap
+	this toggle function by putting the following in your vimrc and
+	replacing <Leader>P with whatever key combination you wish:
+
+		nmap <silent> <Leader>P <Plug>ToggleProject
+
 Note that the Project Plugin remaps :help because the Help Window and the
 Project Window get into a fight over placement. The mapping avoids the
 problem.
 
 ==============================================================================
-ADDING MAPPINGS
+ADDING MAPPINGS 				     *project-adding-mappings*
 
 You can add your own mappings or change the mappings of the plugin by placing
 them in the file $HOME/.vimproject_mappings.  This file, if it exists, will be
@@ -510,15 +518,33 @@ g:proj_flags
 		for \c and \C.  This is off by default for Windows, because
 		the windows browser does not allow you to select directories.
 
+	c	When present, the Project Window will automatically close when
+		you select a file.
+
+	g	When present, the mapping for <F12> will be created to toggle
+		the Project Window open and closed.
+
 g:proj_run1 ...  g:proj_run9
 		Contains a Vim command to execute on the file.  See the
 		mappings of \1 to \9 above.
 		
-		%f is replaced with the filename, %h is replaced with the home
-		directory, and %d is replaced with the CD directory.
-		(Deprecated: %s is also replaced with the filename for
-		backward compatibility.)  Use %F to put in the filename with
-		spaces quoted.
+		  %f is replaced with the full path and filename
+		  %F is replaced with the full path and filename with spaces
+		     quoted
+		  %n is replaced with the filename alone
+		  %N is replaced with the filename alone with spaces quoted
+		  %h is replaced with the home directory
+		  %H is replaced with the home directory with spaces quoted
+		  %r is replaced with the directory relative to the CD path
+		  %R is replaced with the directory relative to the CD path
+		     with spaces quoted
+		  %d is replaced with the CD directory.
+		  %D is replaced with the CD directory.with spaces quoted
+		  %% is replaced with a single % that is not used in
+		     expansion.
+
+		(Deprecated: %s is also replaced with the full path and
+		filename for backward compatibility.)
 
 		For example, gvim will be launched on the file under the
 		cursor when you enter \3 if the following is in your vimrc
@@ -650,7 +676,6 @@ TIPS ON USING PROJECT PLUGIN					*project-tips*
 >
  	. # pragma keep
 <
-
 ==============================================================================
 THANKS
 
