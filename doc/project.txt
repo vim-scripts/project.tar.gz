@@ -1,12 +1,21 @@
 *project.txt*	Plugin for managing multiple projects with multiple sources
 		For Vim version 6.0.
-		Last Change: Thu 18 Oct 2001 09:21:41 AM EDT
+		Last Change: Fri 30 Nov 2001 01:20:11 PM EST
 	
 
 				By Aric Blumer
 			   Aric.Blumer@marconi.com
 
 						    *project* *project-plugin*
+	Contents:
+
+		Commands...................|project-invoking|
+		Inheritiance............|project-inheritance|
+		Mappings...................|project-mappings|
+		Settings...................|project-settings|
+		Example File................|project-example|
+		Tips...........................|project-tips|
+
 
 You can use this plugin's basic functionality to set up a list of
 frequently-accessed files for easy navigation. The list of files will be
@@ -15,10 +24,10 @@ displayed in a window on the left side of the Vim window, and you can press
 this easier to use than having to navigate a directory hierarchy with the
 |file-explorer|.
 
-You can also instruct the Plugin to change to a directory and to run scripts
-when you select a file. These scripts can, for example, modify the environment
-to include compilers in $PATH. This makes it very easy to use quickfix with
-multiple projects that use different environments.
+You can also instruct the Plugin to change to a directory and to run Vim
+scripts when you select a file. These scripts can, for example, modify the
+environment to include compilers in $PATH. This makes it very easy to use
+quickfix with multiple projects that use different environments.
 
 Other features include:
 	o Loading/Unloading all the files in a Project (\l, \L, \w, and \W)
@@ -104,7 +113,8 @@ the local Makefile.  A CD=. means that Vim will make {projpath} or its
 inherited equivalent the current working directory.  When CD is omitted, the
 directory is not changed.  There can be no space on either side of the =.  The
 value of CD can also be a relative path from a parent's CD.  See the
-|project-inheritance| example below.
+|project-inheritance| example below.  This directive is ignored for |netrw|
+projects.
 
 in= and out= provide the means to run arbitrary Vim scripts whenever you enter
 or leave a file's buffer (see the |BufEnter| and |BufLeave| autocommand
@@ -127,25 +137,28 @@ out.vim: >
 Then you can use :make with the proper environment depending on what file you
 are currently editing.  If the path to the script is relative, then it is
 relative from {projpath}.  These directives are inherited by Subprojects
-unless the Subproject specifies its own.
+unless the Subproject specifies its own. For use with |netrw| projects, the
+paths specified for in= and out= must be absolute and local.
 
 filter= specifies a |glob()| file pattern. It is used to regenerate the list
-of files in a Project fold when using the \r (<Leader>r) map in the Project
-Window.  The filter value must be in quotes because it can contain multiple
-file patterns.  If filter is omitted, then the * pattern is used.  There can
-be no space on either side of the =.  A Subproject will inherit the filter of
-its parent unless it specifies its own filter.
+of files in a Project fold when using the \r (<LocalLeader>r) map in the
+Project Window.  The filter value must be in quotes because it can contain
+multiple file patterns.  If filter is omitted, then the * pattern is used.
+There can be no space on either side of the =.  A Subproject will inherit the
+filter of its parent unless it specifies its own filter.
 
 flags= provides the means to enable/disable features for a particular fold.
 The general mnemonic scheme is for lower case to turn something off and upper
 case to turn something on.  {flag} can contain any of the following
 characters:
 
+      flag      Description ~
+
 	l	Turn off recursion for this fold for \L.  Subfolds are also
 	        blocked from the recursion.
 
 	r	Turn off refresh. When present, do not refresh this fold when
-		\r or \R is used.  This does not affect subfolds.
+		\r or \R is used.  This does not affect subfold recursion.
 
 	S	Turn on sorting for refresh and create.
 
@@ -203,25 +216,29 @@ cursor's project inherits.
 ==============================================================================
 MAPPINGS						    *project-mappings*
 
+Map	Action ~
+
 \r	Refreshes the Project fold that the cursor is in by placing in the
 	fold all the files that match the filter. The Project is refreshed
 	using an indent of one space for every foldlevel in the hierarchy.
 	
-	Note that this mapping is actually <Leader>r, and the default of
-	|<Leader>| is \.
+	Note that this mapping is actually <LocalLeader>r, and the default of
+	|<LocalLeader>| is \.
 
-	This does not work for Projects using |netwr|.
+	This does not work for Projects using |netrw|.
 
 \R	Executes \r recursively in the current fold and all folds below.
-	This does not work for Projects using |netwr|.
+	This does not work for Projects using |netrw|.
 
 \c	Creates a Project fold entry.  It asks for the description, the path
-	to the files, and the filename |glob()| pattern.  From this
-	information, it will create the Project Entry below the cursor.  Note
-	that \c does not ask for the value of CD, but uses a default of
-	"CD=.".
+	to the files, the CD parameter, and the filename |glob()| pattern.
+	From this information, it will create the Project Entry below the
+	cursor.
 
-	This does not work for Projects using |netwr|.
+	This does not work for Projects using |netrw|.
+
+\C	Creates a Project fold entry like \c, but recursively includes all the
+	subdirectories.
 
 <Return>
 	Select a file to open in the |CTRL-W_p| window or in a new window.  If
@@ -229,14 +246,15 @@ MAPPINGS						    *project-mappings*
 
 <S-Return>
 \s
-	Same as <Return> but horizontally split the target window. <Leader>s
-	is provided for those terminals that don't recognize <S-Return>.
+	Same as <Return> but horizontally split the target window.
+	<LocalLeader>s is provided for those terminals that don't recognize
+	<S-Return>.
 
 <C-Return>
 \o
 	Same as <Return> but ensure that the opened file is the only other
-	window. <Leader>o is provided for those terminals that don't recognize
-	<C-Return>.
+	window. <LocalLeader>o is provided for those terminals that don't
+	recognize <C-Return>.
 
 <M-Return>
 \v
@@ -274,7 +292,7 @@ MAPPINGS						    *project-mappings*
 \<Up>
 	Move the text or fold under the cursor up one row. This may not work
 	in a terminal because the terminal is unaware of this key combination.
-	<Leader><Up> is provided for those terminals that don't recognize
+	<LocalLeader><Up> is provided for those terminals that don't recognize
 	<C-Up>.
 
 
@@ -282,8 +300,8 @@ MAPPINGS						    *project-mappings*
 \<Down>
 	Move the text or fold under the cursor down one row. This may not work
 	in a terminal because the terminal is unaware of this key combination.
-	<Leader><Down> is provided for those terminals that don't recognize
-	<C-Down>.
+	<LocalLeader><Down> is provided for those terminals that don't
+	recognize <C-Down>.
 
 \i	Show in the status line the completely resolved and inherited
 	parameters for the fold the cursor is in.  This is intended for
@@ -297,35 +315,75 @@ MAPPINGS						    *project-mappings*
 \f1-\f9
 	Run the command specified in g:proj_run_fold{x} where {x} is the
 	number of the key.  The command is run on the files at the current
-	fold level.
+	Project level. See the |project-settings| below.
 
 \F1-\F9
 	Run the command specified in g:proj_run_fold{x} where {x} is the
 	number of the key.  The command is run on the files at the current
-	fold level and all Subprojects.
+	Project level and all Subprojects. See the |project-settings| below.
 
 \0	Display the commands that are defined for \1 through \9.
 
-\l	Load all the files in the current Project level into Vim.
+\f0	Display the commands that are defined for \f1 through \f9 and \F1
+	through \F0.  Same as \F0.
+
+\l	Load all the files in the current Project level into Vim.  While files
+	are being loaded, you may press any key to stop.
 
 \L	Load all the files in the current Project and all Subprojects into
 	Vim.  Use this mapping with caution--I wouldn't suggest using \L to
 	load a Project with thousands of files. (BTW, my Project file has more
-	than 2,800 files in it!)
+	than 5,300 files in it!)  While files are being loaded, you may press
+	any key to stop.
 
 \w	Wipe all the files in the current Project level from Vim. (If files
-	are modified, they will be saved first.)
+	are modified, they will be saved first.)  While files are being
+	loaded, you may press any key to stop.
 
 \W	Wipe all the files in the current Project and all Subprojects from
-	Vim. (If files are modified, they will be saved first.)
+	Vim. (If files are modified, they will be saved first.)  While files
+	are being wiped, you may press any key to stop.
 
 \g	Grep all the files in the current Project level.
 
 \G	Grep all the files in the current Project level and all Subprojects.
 
+\e	Set up the Environment for the Project File as though you had selected
+	it with <Return>.  This allows you to do a \e and a :make without
+	having to open any files in the project.
+
+\E	Explore (using |file-explorer|) the directory of the project the
+	cursor is in.  Does not work with netrw.
+
 Note that the Project Plugin remaps :help because the Help Window and the
 Project Window get into a fight over placement. The mapping avoids the
 problem.
+
+==============================================================================
+ADDING MAPPINGS
+
+You can add your own mappings or change the mappings of the plugin by placing
+them in the file $HOME/.vimproject_mappings.  This file, if it exists, will be
+sourced when the plugin in loaded.  Here is an example that will count the
+number of entries in a project when you press \K (Kount, C is taken :-): >
+
+    function! s:Wc()
+        let b:loadcount=0
+        function! SpawnExec(infoline, fname, lineno, data)
+	    let b:loadcount = b:loadcount + 1
+	    if getchar(0) != 0 | let b:stop_everything=1 | endif
+        endfunction
+        call Project_ForEach(1, line('.'), "*SpawnExec", 0, '')
+        delfunction SpawnExec
+        echon b:loadcount." Files\r"
+        unlet b:loadcount
+        if exists("b:stop_everything")
+	    unlet b:stop_everything
+	    echon "Aborted.\r"
+	endif
+    endfunction
+
+    nnoremap <buffer> <silent> <LocalLeader>K :call <SID>Wc()<CR>
 
 
 ==============================================================================
@@ -353,13 +411,16 @@ g:proj_flags
 	Various flags to control the behavior of the Project Plugin.  This
 	variable can contain any of the following character flags.
 
+       flag	Description ~
+
 	i	When present, display the filename and the current working
 		directory in the command line when a file is selected for
 		opening.
 
 	l	When present, the Project Plugin will use the |:lcd| command
 		rather than |:cd| to change directories when you select a file
-		to open.
+		to open.  This flag is really obsolete and not of much use
+		because of L below.
 
 	L	Similar to l, but install a BufEnter/Leave |:autocommand| to
 		ensure that the current working directory is changed to the
@@ -384,36 +445,50 @@ g:proj_flags
 		refreshing.
 
 g:proj_run1 ...  g:proj_run9
-		Contains a Vim command to execute on the file. The characters
-		%s are replaced with the absolute path of the filename.  See
-		the mappings of \1 to \9 above.
+		Contains a Vim command to execute on the file.  See the
+		mappings of \1 to \9 above.
+		
+		%f is replaced with the filename, %h is replaced with the home
+		directory, and %d is replaced with the CD directory.
+		(Deprecated: %s is also replaced with the filename for
+		backward compatibility.)  Use %F to put in the filename with
+		spaces quoted.
 
 		For example, gvim will be launched on the file under the
 		cursor when you enter \3 if the following is in your vimrc
 		file: >
-		 let g:proj_run3='silent !gvim %s'
+		 let g:proj_run3='silent !gvim %f'
 <		Here are a few other examples: >
-		 let g:proj_run1='!p4 edit %s'
-		 let g:proj_run2='!p4 add %s'
-		 let g:proj_run4='echo "Viewing %s"|sil !xterm -e less %s &'
+		 let g:proj_run1='!p4 edit %f'
+		 let g:proj_run2='!p4 add %f'
+		 let g:proj_run4="echo 'Viewing %f'|sil !xterm -e less %f &"
+<
+		On Windows systems you will want to put the %f, %h, and %d in
+		single quotes to avoid \ escaping.
 <
 g:proj_run_fold1 ...  g:proj_run_fold9
 		Contains a Vim command to execute on the files in a fold.  See
 		the mappings of \f1 to \f9  and \F1 to \F9 above.
 		
-		The characters %s are replaced with the absolute path of the
-		filenames, but multiple filenames can be handled in two ways.
+		%f is the filename, %h is replaced with the project home
+		directory, and %d is replaced with the CD directory.  Multiple
+		filenames can be handled in two ways:
 
-		The first (default) way is to have %s replaced with all the
-		filenames, and the command is run once.  The second is to have
-		the command run for each of the filenames (%s is replaced with
-		one filename at a time).  To select the second behavior, put
-		an '*' character at the beginning of the g:proj_run_fold{x}
-		variable.  (The '*' is stripped before the command is run.)
+		The first (default) way is to have %f replaced with all the
+		absolute filenames, and the command is run once.  The second
+		is to have the command run for each of the non-absolute
+		filenames (%f is replaced with one filename at a time).  To
+		select the second behavior, put an '*' character at the
+		beginning of the g:proj_run_fold{x} variable.  (The '*' is
+		stripped before the command is run.)
 
 		For example, note the difference between the following: >
-		 let g:proj_run_fold3='*echo "%s"'
-		 let g:proj_run_fold4='echo "%s"'
+		 let g:proj_run_fold3="*echo '%h/%f'"
+		 let g:proj_run_fold4="echo '%f'"
+<
+		Note that on Windows systems, you will want the %f, %h, and %c
+		within single quotes, or the \ in the paths will cause
+		problems.  The alternative is to put them in |escape()|.
 
 
 ==============================================================================
@@ -468,7 +543,8 @@ TIPS ON USING PROJECT PLUGIN					*project-tips*
 
 3.  If the Project Window ever gets closed, you can just enter >
 	:Project
-<   to bring it back again.
+<   to bring it back again. (You don't need to give it the filename; the
+    plugin remembers.)
 
     If you have the 'm' flag set in g:proj_flags, then you get the Project
     Window to show up again by pressing |CTRL-W_o|. This, of course, will
@@ -489,7 +565,10 @@ TIPS ON USING PROJECT PLUGIN					*project-tips*
 
 7.  For advanced users, I am exporting the function Project_GetAllFnames()
     which returns all the filenames within a fold and optionally all its
-    Subprojects.  See the code for examples on how to use this.
+    Subprojects.  Also, I export Project_ForEach() for running a function for
+    each filename in the project. See the code for examples on how to use
+    these.
+
 
 ==============================================================================
 THANKS
