@@ -1,6 +1,6 @@
 *project.txt*	Plugin for managing multiple projects with multiple sources
 		For Vim version 6.0.
-		Last Change: Wed 20 Feb 2002 03:18:28 PM EST
+		Last Change: Mon 30 Sep 2002 11:24:07 AM EDT
 	
 
 				By Aric Blumer
@@ -102,12 +102,12 @@ The <Description> will be displayed in the foldtext and cannot contain "=".
 There can be no space character directly on either side of the =.
 
 The {projpath} is the path in which the files listed in the Project's fold
-will be found.  If the path is a relative path, then the plugin constructs the
-whole path from the Project's parent, grandparent, etc., all the way up the
-hierarchy. An outermost project_entry must have an absolute path.  See the
-|project-inheritance| example below.  {projpath} may contain spaces, but they
-must be escaped like normal Vim escapes. Here are two examples of the same
-directory:
+will be found, and it may contain environment variables.  If the path is a
+relative path, then the plugin constructs the whole path from the Project's
+parent, grandparent, etc., all the way up the hierarchy. An outermost
+project_entry must have an absolute path.  See the |project-inheritance|
+example below.  {projpath} may contain spaces, but they must be escaped like
+normal Vim escapes. Here are two examples of the same directory:
 >
 	Example=/my/directory/with\ spaces {
 	}
@@ -238,6 +238,11 @@ Map	Action ~
 \r	Refreshes the Project fold that the cursor is in by placing in the
 	fold all the files that match the filter. The Project is refreshed
 	using an indent of one space for every foldlevel in the hierarchy.
+
+	You may place a "# pragma keep" (without the quotes) at the end of a
+	line and the file entry will not be removed when you refresh.  This is
+	useful, for example, when you have . as an entry so you can easily
+	browse the directory.
 	
 	Note that this mapping is actually <LocalLeader>r, and the default of
 	|<LocalLeader>| is \.
@@ -405,6 +410,43 @@ number of entries in a project when you press \K (Kount, C is taken :-): >
 
     nnoremap <buffer> <silent> <LocalLeader>K :call <SID>Wc()<CR>
 
+Here's another example of how I integrated the use of perforce with the plugin
+in my $HOME/.vimproject_mappings:
+>
+	function! s:DoP4(cmd)
+	   let name=Project_GetFname(line('.'))
+	   let dir=substitute(name, '\(.*\)/.*', '\1', 'g')
+	   exec 'cd '.dir
+	   exec "!".a:cmd.' '.Project_GetFname(line('.'))
+	   cd -
+	endfunction
+
+	nmap <buffer> <silent> \pa :call <SID>DoP4("p4add")<CR>
+	nmap <buffer> <silent> \pe :call <SID>DoP4("p4edit")<CR>
+<
+(Note that I CD to the directory the file is in so I can pick of the $P4CONFIG
+file. See the perforce documentation.)
+
+This creates the mappings \pe to check out the file for edit and \pa to add
+the file to the depot.
+
+Here is another example where I remap the <Return> mapping to use an external
+program to launch a special kind of file (in this case, it launches ee to view
+a jpg file).  It is a bit contrived, but it works.
+>
+	let s:sid = substitute(maparg('<Return>', 'n'), '.*\(<SNR>.\{-}\)_.*', '\1', '')
+	function! s:LaunchOrWhat()
+	    let fname=Project_GetFname(line('.'))
+	    if fname =~ '\.jpg$'
+		exec 'silent! !ee "'.fname.'"&'
+	    else
+		call {s:sid}_DoFoldOrOpenEntry('', 'e')
+	    endif
+	endfunction
+	nnoremap <buffer> <silent> <Return>   \|:call <SID>LaunchOrWhat()<CR>
+<
+If the file ends in .jpg, the external program is launched, otherwise the
+original mapping of <Return> is run.
 
 ==============================================================================
 SETTINGS						    *project-settings*
@@ -463,6 +505,10 @@ g:proj_flags
 
 	T	When present, put Subproject folds at the top of the fold when
 		refreshing.
+
+	b	When present, use the |browse()| when selecting directories
+		for \c and \C.  This is off by default for Windows, because
+		the windows browser does not allow you to select directories.
 
 g:proj_run1 ...  g:proj_run9
 		Contains a Vim command to execute on the file.  See the
@@ -596,6 +642,13 @@ TIPS ON USING PROJECT PLUGIN					*project-tips*
     can put this in your vimrc:
 >
     	nmap <silent> <Leader>P :Project<CR>
+
+<
+9.  You can put the . entry in a project, and it will launch the
+    |file-explorer| plugin on the directory.  To avoid removal when you
+    refresh, make the entry look like this:
+>
+ 	. # pragma keep
 <
 
 ==============================================================================

@@ -1,8 +1,8 @@
 "=============================================================================
 " File:        project.vim
-" Author:      Aric Blumer (Aric.Blumer@marconi.com)
-" Last Change: Tue 26 Mar 2002 04:09:53 PM EST
-" Version:     1.1       ©2002
+" Author:      Aric Blumer (Aric.Blumer at marconi.com)
+" Last Change: Mon 30 Sep 2002 01:36:38 PM EDT
+" Version:     1.2       ©2002
 "=============================================================================
 " See documentation in accompanying help file
 
@@ -32,7 +32,11 @@ function! s:Project(filename) " <<<
         let g:proj_window_increment=100         " Project Window width increment
     endif
     if !exists('g:proj_flags')
-        let g:proj_flags='imst'                 " Project default flags
+        if has("win32") || has("mac")
+            let g:proj_flags='imst'                " Project default flags
+        else
+            let g:proj_flags='imstb'               " Project default flags
+        endif
     endif
     if !exists("g:proj_running") || (bufwinnr(g:proj_running) == -1) " Open the Project Window
         exec 'silent vertical new '.filename
@@ -155,10 +159,11 @@ function! s:Project(filename) " <<<
     " s:IsAbsolutePath(path) <<<
     "   Returns true if filename has an absolute path.
     function! s:IsAbsolutePath(path)
-        if a:path[0] == '/' || a:path[0] == '~' || a:path[0] == '\\' || a:path[1] == ':'
+        let path=expand(a:path) " Expand any environment variables that might be in the path
+        if path[0] == '/' || path[0] == '~' || path[0] == '\\' || path[1] == ':'
             return 1
         endif
-        if a:path =~ '^ftp:' || a:path =~ '^rcp:' || a:path =~ '^scp:' || a:path =~ '^http:'
+        if path =~ '^ftp:' || path =~ '^rcp:' || path =~ '^scp:' || path =~ '^http:'
             return 2
         endif
         return 0
@@ -176,12 +181,12 @@ function! s:Project(filename) " <<<
         if n == winnr()
             " If n == winnr(), then there is no CTRL_W-p window
             " So we have to create a new one
-            if bufnr('.') == g:proj_running
+            if bufnr('%') == g:proj_running
                 exec 'silent vertical new'
             else
                 exec 'silent vertical split | silent! bnext'
             endif
-            wincmd p                    " Go back to the Project Window and ensure it is the right width
+            wincmd p " Go back to the Project Window and ensure it is the right width
             silent! wincmd H
             exec 'vertical resize '.g:proj_window_width
             wincmd p
@@ -197,20 +202,12 @@ function! s:Project(filename) " <<<
         call s:DoSetup()                " Ensure that all the settings are right
         if winbufnr(2) == -1            " We're the only window right now.
             exec 'silent vertical split | bnext'
-            if bufnr('.') == g:proj_running
+            if bufnr('%') == g:proj_running
                 enew
             endif
             if bufnr('%') == g:proj_last_buffer | bnext | bprev | bnext | endif
-            wincmd p                    " Go back to the Project Window and ensure it is the right width
+            wincmd p " Go back to the Project Window and ensure it is the right width
         endif
-"         if bufnr('%') == g:proj_running
-"             if (winbufnr(0) == g:proj_running) && (winnr() != 1)
-"                 bnext
-"                 if bufnr('.') == g:proj_running
-"                     enew
-"                 endif
-"             endif
-"         endif
         silent! wincmd H
         exec 'vertical resize '.g:proj_window_width
     endfunction
@@ -478,10 +475,11 @@ function! s:Project(filename) " <<<
         let absolute = (foldlev <= 0)?'Absolute ': ''
         let home=''
         let filter='*'
-        if has('browse') && !has('win32')
+        if (match(g:proj_flags, '\Cb') != -1) && has('browse')
             " Note that browse() is inconsistent: On Win32 you can't select a
             " directory, and it gives you a relative path.
             let dir = browse(0, 'Enter the '.absolute.'Directory to Load: ', '', '')
+            let dir = fnamemodify(dir, ':p')
         else
             let dir = inputdialog('Enter the '.absolute.'Directory to Load: ', '')
         endif
@@ -608,7 +606,7 @@ function! s:Project(filename) " <<<
             endif
             if getline('.') !~ '{'
                 " We haven't reached a sub-fold, so delete what's there.
-                if just_a_fold == 0 && getline('.') !~ '^\s*#'
+                if (just_a_fold == 0) && (getline('.') !~ '^\s*#') && (getline('.') !~ '#.*pragma keep')
                     d _
                 else
                     " Skip lines only in a fold and comment lines
@@ -1081,7 +1079,6 @@ function! s:Project(filename) " <<<
             endif
         endif
     endfunction ">>>
-        "
     if !exists("g:proj_running")
         " s:DoProjectOnly(void) <<<
         "   Make the file window the only one.
@@ -1096,6 +1093,7 @@ function! s:Project(filename) " <<<
                 unlet lzsave
             endif
         endfunction
+        " >>>
 
         " Mappings <<<
         nnoremap <buffer> <silent> <Return>   \|:call <SID>DoFoldOrOpenEntry('', 'e')<CR>
