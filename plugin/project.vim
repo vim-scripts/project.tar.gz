@@ -1,8 +1,8 @@
 "=============================================================================
 " File:        project.vim
 " Author:      Aric Blumer (Aric.Blumer at marconi.com)
-" Last Change: Mon 30 Sep 2002 01:36:38 PM EDT
-" Version:     1.2       ©2002
+" Last Change: Tue 01 Oct 2002 12:00:06 PM EDT
+" Version:     1.2.1       ©2002
 "=============================================================================
 " See documentation in accompanying help file
 
@@ -159,12 +159,12 @@ function! s:Project(filename) " <<<
     " s:IsAbsolutePath(path) <<<
     "   Returns true if filename has an absolute path.
     function! s:IsAbsolutePath(path)
+        if a:path =~ '^ftp:' || a:path =~ '^rcp:' || a:path =~ '^scp:' || a:path =~ '^http:'
+            return 2
+        endif
         let path=expand(a:path) " Expand any environment variables that might be in the path
         if path[0] == '/' || path[0] == '~' || path[0] == '\\' || path[1] == ':'
             return 1
-        endif
-        if path =~ '^ftp:' || path =~ '^rcp:' || path =~ '^scp:' || path =~ '^http:'
-            return 2
         endif
         return 0
     endfunction " >>>
