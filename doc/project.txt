@@ -1,6 +1,6 @@
 *project.txt*	Plugin for managing multiple projects with multiple sources
 		For Vim version 6.0.
-		Last Change: Fri 30 Nov 2001 01:20:11 PM EST
+		Last Change: Wed 20 Feb 2002 03:18:28 PM EST
 	
 
 				By Aric Blumer
@@ -105,7 +105,24 @@ The {projpath} is the path in which the files listed in the Project's fold
 will be found.  If the path is a relative path, then the plugin constructs the
 whole path from the Project's parent, grandparent, etc., all the way up the
 hierarchy. An outermost project_entry must have an absolute path.  See the
-|project-inheritance| example below.
+|project-inheritance| example below.  {projpath} may contain spaces, but they
+must be escaped like normal Vim escapes. Here are two examples of the same
+directory:
+>
+	Example=/my/directory/with\ spaces {
+	}
+	Example="/my/directory/with spaces" {
+	}
+
+I recommend this for Windows®: >
+
+	Example="c:\My Documents" {
+	}
+
+But Vim is smart enough to do this, too: >
+
+	Example=c:\My\ Documents {
+	}
 
 CD= provides the directory that Vim will change to when you select a file in
 that fold (using |:cd|). This allows you, for example, to enter |:make| to use
@@ -114,7 +131,7 @@ inherited equivalent the current working directory.  When CD is omitted, the
 directory is not changed.  There can be no space on either side of the =.  The
 value of CD can also be a relative path from a parent's CD.  See the
 |project-inheritance| example below.  This directive is ignored for |netrw|
-projects.
+projects. Spaces are allowed in the path as for {projpath}.
 
 in= and out= provide the means to run arbitrary Vim scripts whenever you enter
 or leave a file's buffer (see the |BufEnter| and |BufLeave| autocommand
@@ -308,6 +325,9 @@ Map	Action ~
 	debugging your relative path and inherited parameters for manually
 	entered Projects.
 
+\I	Show in the status line the completely resolved filename.  Uses the
+        Project_GetFname(line('.')) function.
+
 \1 - \9
 	Run the command specified in g:proj_run{x} where {x} is the number
 	of the key.  See the documentation of g:proj_run1 below.
@@ -465,7 +485,7 @@ g:proj_run1 ...  g:proj_run9
 <
 		On Windows systems you will want to put the %f, %h, and %d in
 		single quotes to avoid \ escaping.
-<
+
 g:proj_run_fold1 ...  g:proj_run_fold9
 		Contains a Vim command to execute on the files in a fold.  See
 		the mappings of \f1 to \f9  and \F1 to \F9 above.
@@ -567,8 +587,16 @@ TIPS ON USING PROJECT PLUGIN					*project-tips*
     which returns all the filenames within a fold and optionally all its
     Subprojects.  Also, I export Project_ForEach() for running a function for
     each filename in the project. See the code for examples on how to use
-    these.
+    these. Finally, I export Project_GetFname(line_number) so that you can
+    write your own mappings and get the filename for it.
 
+8.  Some people have asked how to do a global mapping to take the cursor to
+    the Project window. One of my goals for the plugin is for it to be as
+    self-contained as possible, so I'm not going to add it by default. But you
+    can put this in your vimrc:
+>
+    	nmap <silent> <Leader>P :Project<CR>
+<
 
 ==============================================================================
 THANKS
@@ -578,6 +606,7 @@ THANKS
 
 		Tomas Zellerin
 		Lawrence Kesteloot
+		Dave Eggum
 
 
  vim:ts=8 sw=8 noexpandtab tw=78 ft=help:
