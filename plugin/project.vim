@@ -1,8 +1,8 @@
 "=============================================================================
 " File:        project.vim
 " Author:      Aric Blumer (Aric.Blumer@marconi.com)
-" Last Change: Tue 09 Oct 2001 03:20:45 PM EDT
-" Version:     1.0pre3
+" Last Change: Thu 18 Oct 2001 01:02:07 PM EDT
+" Version:     1.0pre4
 "=============================================================================
 " See documentation in accompanying help file
 
@@ -23,7 +23,6 @@ function! s:Project(filename) " <<<
             let filename = a:filename
         endif
     endif
-
     if !exists('g:proj_window_width')
         " Default project window width
         let g:proj_window_width=24
@@ -36,7 +35,6 @@ function! s:Project(filename) " <<<
         " Project default flags
         let g:proj_flags='imst'
     endif
-
     " Open the Project Window
     if !exists("g:proj_running") || (bufwinnr(g:proj_running) == -1)
         exec 'silent vertical new '.filename
@@ -47,7 +45,6 @@ function! s:Project(filename) " <<<
         silent! 99wincmd h
         return
     endif
-
     " Process the flags
     let b:proj_cd_cmd='cd'
     if match(g:proj_flags, '\Cl') != -1
@@ -77,25 +74,23 @@ function! s:Project(filename) " <<<
         setlocal nowrap
     endfunction
     ">>>------------------------------------------------------------------
-
     call s:DoSetup()
-
     " Syntax Stuff <<<
     if match(g:proj_flags, '\Cs')!=-1 && has('syntax') && exists('g:syntax_on') && !has('syntax_items')
-        syntax match projectDescriptionDir '^\s*\S.\{-}=\s*\f\+'        contains=projectDescription,projectWhiteError
+        syntax match projectDescriptionDir '^\s*\S.\{-}=\s*\(\f\|:\)\+'        contains=projectDescription,projectWhiteError
         syntax match projectDescription    '\S[^=]\{-}\S='he=e-1,me=e-1 contained nextgroup=projectDirectory,projectWhiteError
         syntax match projectDescription    '{\|}'
-        syntax match projectDirectory      '=\f\+'                      contained
+        syntax match projectDirectory      '=\(\f\|:\)\+'                      contained
         syntax match projectScriptinout    '\<in='he=e-1,me=e-1         nextgroup=projectDirectory,projectWhiteError
         syntax match projectScriptinout    '\<out='he=e-1,me=e-1        nextgroup=projectDirectory,projectWhiteError
         syntax match projectComment        '#.*'
-        syntax match projectCD             '\<CD\s*=\s*\f\+'            contains=projectDescription,projectWhiteError
+        syntax match projectCD             '\<CD\s*=\s*\(\f\|:\)\+'            contains=projectDescription,projectWhiteError
         syntax match projectFilterEntry    '\<filter\s*=.*"'            contains=projectWhiteError,projectFilterError,projectFilter,projectFilterRegexp
         syntax match projectFilter         '\<filter='he=e-1,me=e-1     contained nextgroup=projectFilterRegexp,projectFilterError,projectWhiteError
         syntax match projectFlagsEntry     '\<flags\s*=\( \|[^ ]*\)'    contains=projectFlags,projectWhiteError
         syntax match projectFlags          '\<flags'                    contained nextgroup=projectFlagsValues,projectWhiteError
         syntax match projectFlagsValues    '=[^ ]* 'me=e-1              contained contains=projectFlagsError
-        syntax match projectFlagsError     '[^rtTsS= ]\+'               contained
+        syntax match projectFlagsError     '[^rtTsSwl= ]\+'             contained
         syntax match projectWhiteError     '=\s\+'hs=s+1                contained
         syntax match projectWhiteError     '\s\+='he=e-1                contained
         syntax match projectFilterError    '=[^"]'hs=s+1                contained
@@ -137,7 +132,6 @@ function! s:Project(filename) " <<<
                 let result = 0
             endif
             if (result <= 0)
-                " Need to put it before the partition.  Swap lines i and partition.
                 let partition = partition + 1
                 if (result == 0)
                     let middle = partition
@@ -150,10 +144,6 @@ function! s:Project(filename) " <<<
             endif
             let i = i + 1
         endwhile
-
-        " Now we have a pointer to the "middle" element, as far as partitioning
-        " goes, which could be anywhere before the partition.  Make sure it is at
-        " the end of the partition.
         if (middle != partition)
             let str = getline(middle)
             let str2 = getline(partition)
@@ -167,7 +157,13 @@ function! s:Project(filename) " <<<
     " s:IsAbsolutePath(path) <<<
     "   Returns true if filename has an absolute path.
     function! s:IsAbsolutePath(path)
-        return a:path[0] == '/' || a:path[0] == '~' || a:path[0] == '\\' || a:path[1] == ':'
+        if a:path[0] == '/' || a:path[0] == '~' || a:path[0] == '\\' || a:path[1] == ':'
+            return 1
+        endif
+        if a:path =~ '^ftp:' || a:path =~ '^rcp:' || a:path =~ '^scp:' || a:path =~ '^http:'
+            return 2
+        endif
+        return 0;
     endfunction
     " >>>
     " s:DoSetupAndSplit() <<<
@@ -194,26 +190,28 @@ function! s:Project(filename) " <<<
         endif
     endfunction
     ">>>------------------------------------------------------------------
-    " s:RecursivelyConstructDirectives() <<<
-    "   Look at current fold and all parent folds
-    "   file.  Assumes that you are at the initial line of the fold when it is
-    "   called.  The cursor could be anywhere when it finally returns.
-    function! s:RecursivelyConstructDirectives()
-        let foldlineno = line('.')
-        if foldlevel(foldlineno) > 1
+    " s:RecursivelyConstructDirectives(lineno) <<<
+    "   Construct the inherited directives
+    function! s:RecursivelyConstructDirectives(lineno)
+        let lineno=s:FindFoldTop(a:lineno)
+        let foldlineno = lineno
+        let foldlev=foldlevel(lineno)
+        if foldlev > 1
             " Go to parent fold
-            silent! normal! [z
-            let parent_infoline = s:RecursivelyConstructDirectives()
-            let parent_home = substitute(parent_infoline, '^[^=]*=\(\f\+\).*', '\1', '')
-            let parent_c_d = substitute(parent_infoline, '.*\<CD=\(\f\+\).*', '\1', '')
+            while foldlevel(lineno) >= foldlev
+                let lineno = lineno - 1
+            endwhile
+            let parent_infoline = s:RecursivelyConstructDirectives(lineno)
+            let parent_home = substitute(parent_infoline, '^[^=]*=\(\(\f\|:\)\+\).*', '\1', '')
+            let parent_c_d = substitute(parent_infoline, '.*\<CD=\(\(\f\|:\)\+\).*', '\1', '')
             if strlen(parent_c_d) == strlen(parent_infoline)
                 let parent_c_d = ""
             endif
-            let parent_scriptin = substitute(parent_infoline, '.*\<in=\(\f\+\).*', '\1', '')
+            let parent_scriptin = substitute(parent_infoline, '.*\<in=\(\(\f\|:\)\+\).*', '\1', '')
             if strlen(parent_scriptin) == strlen(parent_infoline)
                 let parent_scriptin = ""
             endif
-            let parent_scriptout = substitute(parent_infoline, '.*\<out=\(\f\+\).*', '\1', '')
+            let parent_scriptout = substitute(parent_infoline, '.*\<out=\(\(\f\|:\)\+\).*', '\1', '')
             if strlen(parent_scriptout) == strlen(parent_infoline)
                 let parent_scriptout = ""
             endif
@@ -231,9 +229,8 @@ function! s:Project(filename) " <<<
         endif
 
         let infoline = getline(foldlineno)
-
         " Extract the home directory of this fold
-        let home=substitute(infoline, '^[^=]*=\(\f\+\).*', '\1', '')
+        let home=substitute(infoline, '^[^=]*=\(\(\f\|:\)\+\).*', '\1', '')
         if strlen(home) == strlen(infoline)
             let home=""
         else
@@ -248,7 +245,7 @@ function! s:Project(filename) " <<<
                 endif
             endif
         endif
-        if (home[0] == '/') || (home[0] == '~') || (strlen(parent_home) == 0)
+        if s:IsAbsolutePath(home) || (strlen(parent_home) == 0)
             let parent_home=home
         else
             if strlen(home) != 0
@@ -256,7 +253,7 @@ function! s:Project(filename) " <<<
             endif
         endif
         " Extract any CD information
-        let c_d = substitute(infoline, '.*CD=\(\f\+\).*', '\1', '')
+        let c_d = substitute(infoline, '.*CD=\(\(\f\|:\)\+\).*', '\1', '')
         if strlen(c_d) == strlen(infoline)
             let c_d=""
         else
@@ -281,7 +278,7 @@ function! s:Project(filename) " <<<
         endif
 
         " Extract scriptin
-        let scriptin = substitute(infoline, '.*\<in=\(\f\+\).*', '\1', '')
+        let scriptin = substitute(infoline, '.*\<in=\(\(\f\|:\)\+\).*', '\1', '')
         if strlen(scriptin) == strlen(infoline)
             let scriptin = ""
         else
@@ -292,7 +289,7 @@ function! s:Project(filename) " <<<
         endif
 
         " Extract scriptout
-        let scriptout = substitute(infoline, '.*\<out=\(\f\+\).*', '\1', '')
+        let scriptout = substitute(infoline, '.*\<out=\(\(\f\|:\)\+\).*', '\1', '')
         if strlen(scriptout) == strlen(infoline)
             let scriptout = ""
         else
@@ -332,37 +329,29 @@ function! s:Project(filename) " <<<
         silent! wincmd p
     endfunction
     ">>>------------------------------------------------------------------
-    " s:OpenEntry(precmd, editcmd, buffcmd) <<<
+    " s:OpenEntry(line, precmd, editcmd, buffcmd) <<<
     "   Get the filename under the cursor, and open a window with it.
-    function! s:OpenEntry(precmd, editcmd, buffcmd)
+    function! s:OpenEntry(line, precmd, editcmd, buffcmd)
         let savelz=&lz
         set lz
         silent exec a:precmd
         " Ensure the window is the right width
         exec 'vertical resize '.g:proj_window_width
-        if foldlevel('.') == 0
+        if foldlevel(a:line) == 0
             " If we're outside a fold, do nothing
-            return
+            return 0
         endif
         " Get rid of comments
-        let fname=substitute(getline('.'), '#.*', '', '')
+        let fname=substitute(getline(a:line), '#.*', '', '')
         " Get rid of leading whitespace
         let fname=substitute(fname, '^\s*\(.*\)', '\1', '')
         if strlen(fname) == 0
             " The line is blank. Do nothing.
-            return
+            return 0
         endif
-        " Set a marker that we can return to when we're done getting the
-        " header info
-        normal! ma
-        " Go to the top of the fold
-        normal! [z
-        let infoline = s:RecursivelyConstructDirectives()
-        "let infoline = getline('.')
+        let infoline = s:RecursivelyConstructDirectives(a:line)
         " Extract the home directory of this fold
-        let home=substitute(infoline, '^[^=]*=\(\f\+\).*', '\1', '').'/'
-        " Return to the marker
-        normal! `a
+        let home=substitute(infoline, '^[^=]*=\(\(\f\|:\)\+\).*', '\1', '').'/'
         "Save the cd command
         let cd_cmd = b:proj_cd_cmd
         call s:DoSetupAndSplit()
@@ -373,17 +362,23 @@ function! s:Project(filename) " <<<
         if bufnr(fname) == -1
             " The buffer doesn't exist. Execute the editcmd on the filename to
             " load the buffer.
-            silent exec a:editcmd.' '.fname
-            let g:proj_status=1
+            if s:IsAbsolutePath(fname) == 2
+                exec a:editcmd.' '.fname
+            else
+                silent exec a:editcmd.' '.fname
+            endif
         else
             " The buffer does exist. Just use the buffcmd on the buffer to
             " display it.
-            silent exec a:buffcmd.' '.fname
-            let g:proj_status=2
+            if s:IsAbsolutePath(fname) == 2
+                exec a:buffcmd.' '.fname
+            else
+                silent exec a:buffcmd.' '.fname
+            endif
         endif
         " Extract any CD information
         if infoline =~ 'CD='
-            let c_d = substitute(infoline, '.*\<CD=\(\f\+\).*', '\1', '')
+            let c_d = substitute(infoline, '.*\<CD=\(\(\f\|:\)\+\).*', '\1', '')
             if match(g:proj_flags, '\CL') != -1
                 call s:SetupAutoCommand(c_d)
             endif
@@ -399,7 +394,7 @@ function! s:Project(filename) " <<<
         endif
         " Extract any scriptin information
         if infoline =~ '\<in='
-            let scriptin = substitute(infoline, '.*\<in=\(\f\+\).*', '\1', '')
+            let scriptin = substitute(infoline, '.*\<in=\(\(\f\|:\)\+\).*', '\1', '')
             if strlen(scriptin) != strlen(infoline)
                 if !s:IsAbsolutePath(scriptin)
                     let scriptin=home.'/'.scriptin
@@ -413,7 +408,7 @@ function! s:Project(filename) " <<<
             endif
         endif
         if infoline =~ '\<out='
-            let scriptout = substitute(infoline, '.*\<out=\(\f\+\).*', '\1', '')
+            let scriptout = substitute(infoline, '.*\<out=\(\(\f\|:\)\+\).*', '\1', '')
             if strlen(scriptout) != strlen(infoline)
                 if !s:IsAbsolutePath(scriptout)
                     let scriptout=home.'/'.scriptout
@@ -427,20 +422,21 @@ function! s:Project(filename) " <<<
         endif
         let &lz=savelz
         call s:DisplayInfo()
+        return 1
     endfunction
     ">>>------------------------------------------------------------------
-    " s:DoFoldOrOpenEntry(cmd) <<<
+    " s:DoFoldOrOpenEntry(cmd0, cmd1, cmd2) <<<
     "   Used for double clicking. If the mouse is on a fold, open/close it. If
     "   not, try to open the file.
     function! s:DoFoldOrOpenEntry(cmd0, cmd1, cmd2)
-        if getline('.')=~'{\|}'
+        if getline('.')=~'{\|}' || foldclosed('.') != -1
             normal! za
         else
-            call s:OpenEntry(a:cmd0, a:cmd1, a:cmd2)
+            call s:OpenEntry(line('.'), a:cmd0, a:cmd1, a:cmd2)
         endif
     endfunction
     ">>>------------------------------------------------------------------
-    " s:VimDirListing(filter, padding) <<<
+    " s:VimDirListing(filter, padding, sort) <<<
     function! s:VimDirListing(filter, padding, sort)
         let end = 0
         let files=''
@@ -487,7 +483,7 @@ function! s:Project(filename) " <<<
         endif
     endfunction
     ">>>------------------------------------------------------------------
-    " s:DoEntryFromDir() <<<
+    " s:DoEntryFromDir(line, name, absolute_dir, dir, c_d, filter_directive, filter, foldlev, sort) <<<
     "   Places a fold in the buffer consisting of files from the given
     "   directory. The indention is controlled by foldlev.
     function! s:DoEntryFromDir(line, name, absolute_dir, dir, c_d, filter_directive, filter, foldlev, sort)
@@ -550,26 +546,16 @@ function! s:Project(filename) " <<<
             let dir=strpart(dir, 0, strlen(dir)-1)
         endif
         if (foldlev > 0)
-            normal! mk
-            if getline('.') =~ '}'
-                normal! 0f}%[z
-            elseif (getline('.') =~ '{')
-                " If the fold is open, then we're already on the parent; do
-                " nothing.
-                if (foldclosed('.') != -1)
-                    normal! [z
-                endif
-            else
-                normal! [z
-            endif
             " Cursor is now on the parent's fold
-            let home=s:RecursivelyConstructDirectives()
-            let filter = substitute(home, '.*\<filter="\([^"]*\).*', '\1', '')
-            let home=substitute(home, '^[^=]*=\(\f\+\).*', '\1', '')
-            if home[strlen(home)-1] != '/' && home[strlen(home)-1] != '\\'
+            let parent_directive=s:RecursivelyConstructDirectives(line('.'))
+            let filter = substitute(parent_directive, '.*\<filter="\([^"]*\).*', '\1', '')
+            let home=substitute(parent_directive, '^[^=]*=\(\(\f\|:\)\+\).*', '\1', '')
+            if strlen(home) == strlen(parent_directive)
+                let home=""
+            elseif home[strlen(home)-1] != '/' && home[strlen(home)-1] != '\\'
                 let home=home.'/'
             endif
-            normal! `k
+            unlet parent_directive
 
             if !s:IsAbsolutePath(dir)
                 " It is not a relative path  Try to make it relative
@@ -615,7 +601,7 @@ function! s:Project(filename) " <<<
         normal! `k
     endfunction
     ">>>------------------------------------------------------------------
-    " s:RefreshEntriesFromDir() <<<
+    " s:RefreshEntriesFromDir(recursive) <<<
     "   Finds metadata at the top of the fold, and then replaces all files
     "   with the contents of the directory.  Works recursively if recursive is
     "   1.
@@ -626,13 +612,11 @@ function! s:Project(filename) " <<<
         " a fold already.
         normal! zo]z[z
         let just_a_fold=0
-        normal! mk
-        let infoline = s:RecursivelyConstructDirectives()
-        normal! `k
+        let infoline = s:RecursivelyConstructDirectives(line('.'))
         let immediate_infoline = getline('.')
         " Extract the home directory of the fold
-        let dir = substitute(infoline, '[^=]*=\(\f*\).*', '\1', '')
-        if strlen(substitute(immediate_infoline, '[^=]*=\(\f*\).*', '\1', '')) == strlen(immediate_infoline)
+        let dir = substitute(infoline, '[^=]*=\(\(\f\|:\)*\).*', '\1', '')
+        if strlen(substitute(immediate_infoline, '[^=]*=\(\(\f\|:\)*\).*', '\1', '')) == strlen(immediate_infoline)
             let just_a_fold = 1
         endif
         if strlen(dir) == strlen(infoline)
@@ -779,7 +763,7 @@ function! s:Project(filename) " <<<
     "   the flags.
     function! s:DisplayInfo()
         if match(g:proj_flags, '\Ci') != -1
-            echo 'file: '.expand('%').', cwd: '.getcwd()
+            echo 'file: '.expand('%').', cwd: '.getcwd().', lines: '.line('$')
         endif
     endfunction
     " >>>
@@ -826,52 +810,215 @@ function! s:Project(filename) " <<<
         exec 'vertical resize ' . g:proj_window_width
     endfunction
     ">>>------------------------------------------------------------------
-    " s:MyInheritedStatusline() <<<
-    "   Show what my completely resolved and inherited info looks like
-    function! s:MyInheritedStatusline()
-        normal! mkHml`k
-        if getline('.') !~ '{'
-            normal! [z
-        endif
-        let retval=s:RecursivelyConstructDirectives()
-        normal! `lzt`k
-        echo retval
-    endfunction
-    ">>>------------------------------------------------------------------
     " s:Spawn(number) <<<
     "   Spawn an external command on the file
     function! s:Spawn(number)
         if exists("g:proj_run".a:number)
             let fname=getline('.')
             if fname!~'{\|}'
-                normal! mkHml`k
                 let fname=substitute(fname, '#.*', '', '')
-                let fname=substitute(fname, '^\s*\(.*\)', '\1', '')
+                let fname=substitute(fname, '^\s*\(.*\)\s*', '\1', '')
                 if strlen(fname) == 0
                     " The line is blank. Do nothing.
                     return
                 endif
-                silent! normal! [z
-                let parent_infoline = s:RecursivelyConstructDirectives()
-                let parent_home = substitute(parent_infoline, '^[^=]*=\(\f\+\).*', '\1', '')
+                let parent_infoline = s:RecursivelyConstructDirectives(line('.'))
+                let parent_home = substitute(parent_infoline, '^[^=]*=\(\(\f\|:\)\+\).*', '\1', '')
                 exec substitute(g:proj_run{a:number}, '%s', parent_home.'/'.fname, 'g')
-                normal! `lzt`k
             endif
         endif
     endfunction
     ">>>------------------------------------------------------------------
-    " s:ListSpawn() <<<
+    " s:ListSpawn(varnamesegment) <<<
     "   List external commands
-    function! s:ListSpawn()
+    function! s:ListSpawn(varnamesegment)
         let number = 1
         while number < 10
-            if exists("g:proj_run".number)
-                echohl LineNr | echo number.':' | echohl None | echon ' '.g:proj_run{number}
+            if exists("g:proj_run".a:varnamesegment.number)
+                echohl LineNr | echo number.':' | echohl None | echon ' '.g:proj_run{a:varnamesegment}{number}
             else
                 echohl LineNr | echo number.':' | echohl None
             endif
             let number=number + 1
         endwhile
+    endfunction
+    ">>>------------------------------------------------------------------
+    " s:FindFoldTop(line) <<<
+    "   Return the line number of the directive line
+    function! s:FindFoldTop(line)
+        let lineno=a:line
+        while getline(lineno) !~ '{' && lineno > 1
+            if getline(lineno) =~ '}'
+                let lineno=s:FindFoldTop(lineno - 1)
+            endif
+            let lineno = lineno - 1
+        endwhile
+        return lineno
+    endfunction
+    ">>>------------------------------------------------------------------
+    " s:FindFoldBottom(line) <<<
+    "   Return the line number of the directive line
+    function! s:FindFoldBottom(line)
+        let lineno=a:line
+        if getline(lineno) =~ '{'
+            let lineno=lineno + 1
+        endif
+        while getline(lineno) !~ '}' && lineno < line('$')
+            if getline(lineno) =~ '{'
+                let lineno=s:FindFoldBottom(lineno)
+            endif
+            let lineno = lineno + 1
+        endwhile
+        return lineno
+    endfunction
+    ">>>------------------------------------------------------------------
+    " s:LoadAll(recurse, line) <<<
+    "   Load all files in a project
+    function! s:LoadAll(recurse, line)
+        let lineno=s:FindFoldTop(a:line) + 1
+        while getline(lineno) !~ '}'
+            if getline(lineno) =~ '{'
+                if a:recurse
+                    let flags = substitute(getline(lineno), '.*\<flags=\([^ {]*\).*', '\1', '')
+                    if strlen(flags) == strlen(getline(lineno)) || match(flags, '\Cl') == -1
+                        let lineno = s:LoadAll(1, lineno)
+                    else
+                        let lineno = s:FindFoldBottom(lineno)
+                    endif
+                else
+                    let lineno = s:FindFoldBottom(lineno)
+                endif
+            else
+                if s:OpenEntry(lineno, '', 'e', 'bu')
+                    wincmd p
+                endif
+            endif
+            let lineno = lineno + 1
+        endwhile
+        return lineno
+    endfunction
+    ">>>------------------------------------------------------------------
+    " s:WipeAll(recurse, line) <<<
+    "   Wipe all files in a project
+    function! s:WipeAll(recurse, line)
+        let lineno=s:FindFoldTop(a:line) + 1
+        let home=s:RecursivelyConstructDirectives(lineno)
+        let home=substitute(home, '^[^=]*=\(\(\f\|:\)\+\).*', '\1', '')
+        if strlen(home) != 0
+            let home=home.'/'
+        endif
+        while getline(lineno) !~ '}'
+            if getline(lineno) =~ '{'
+                if a:recurse
+                    let flags = substitute(getline(lineno), '.*\<flags=\([^ {]*\).*', '\1', '')
+                    if strlen(flags) == strlen(getline(lineno)) || match(flags, '\Cw') == -1
+                        let lineno = s:WipeAll(1, lineno)
+                    else
+                        let lineno = s:FindFoldBottom(lineno)
+                    endif
+                else
+                    let lineno = s:FindFoldBottom(lineno)
+                endif
+            else
+                " Get rid of comments
+                let fname=substitute(getline(lineno), '#.*', '', '')
+                " Get rid of leading whitespace
+                let fname=substitute(fname, '^\s*\(.*\)', '\1', '')
+                if strlen(fname) != 0
+                    if !s:IsAbsolutePath(fname)
+                        let fname=home.fname
+                    endif
+                    if s:IsAbsolutePath(fname) != 2
+                        let fname=glob(fname)
+                    endif
+                    if bufloaded(fname)
+                        if getbufvar(fname, '&modified') == 1
+                            exec 'sb '.fname
+                            wincmd L
+                            w
+                            wincmd p
+                        endif
+                        exec 'bwipe! '.fname
+                    endif
+                endif
+            endif
+            let lineno = lineno + 1
+        endwhile
+        return lineno
+    endfunction
+    ">>>------------------------------------------------------------------
+    " s:GrepAll(recurse, lineno, pattern) <<<
+    "   Grep all files in a project, optionally recursively
+    function! s:GrepAll(recurse, lineno, pattern)
+        if strlen(a:pattern) == 0
+            let pattern=input("GREP Pattern: ")
+        else
+            let pattern=a:pattern
+        endif
+        let fnames=Project_GetAllFnames(a:recurse, a:lineno, ' ')
+        cclose " Make sure grep window is closed
+        call s:DoSetupAndSplit()
+        silent! exec 'silent! grep '.pattern.' '.fnames
+        copen
+    endfunction
+    ">>>
+    " Project_GetAllFnames(recurse, lineno, separator) <<<
+    "   Grep all files in a project, optionally recursively
+    function! Project_GetAllFnames(recurse, lineno, separator)
+        let home=s:RecursivelyConstructDirectives(a:lineno)
+        let home=substitute(home, '^[^=]*=\(\(\f\|:\)\+\).*', '\1', '')
+        if strlen(home) != 0
+            let home=home.'/'
+        endif
+        let lineno=s:FindFoldTop(a:lineno) + 1
+        let curline=getline(lineno)
+        let retval=""
+        while curline !~ '}' && curline < line('$')
+            if curline =~ '{'
+                if a:recurse
+                    if retval != ""
+                        let retval=retval.a:separator.Project_GetAllFnames(a:recurse+1, lineno, a:separator)
+                    else
+                        let retval=Project_GetAllFnames(a:recurse+1, lineno, a:separator)
+                    endif
+                endif
+                let lineno = s:FindFoldBottom(lineno)
+            else
+                let fname=substitute(curline, '#.*', '', '')
+                let fname=substitute(fname, '^\s*\(.*\)', '\1', '')
+                if strlen(fname) != strlen(curline) && strlen(fname) > 0
+                    if !s:IsAbsolutePath(fname)
+                        let fname=home.fname
+                    endif
+                    if retval != ""
+                        let retval=retval.a:separator.fname
+                    else
+                        let retval=fname
+                    endif
+                endif
+            endif
+            let lineno=lineno + 1
+            let curline=getline(lineno)
+        endwhile
+        return retval
+    endfunction
+    ">>>------------------------------------------------------------------
+    " s:SpawnAll(recurse, number) <<<
+    "   Spawn an external command on the files of a project
+    function! s:SpawnAll(recurse, number)
+        if exists("g:proj_run_fold".a:number)
+            if g:proj_run_fold{a:number}[0] == '*'
+                let fnames=Project_GetAllFnames(a:recurse, line('.'), "\010")."\010"
+                while strlen(fnames) > 0
+                    let fname = substitute(fnames,  '\(\(\f\|:\)*\).*', '\1', '')
+                    let fnames = substitute(fnames, '\(\f\|:\)*.\(.*\)', '\2', '')
+                    exec substitute(strpart(g:proj_run_fold{a:number}, 1), '%s', fname, 'g')
+                endwhile
+            else
+                let fnames=Project_GetAllFnames(a:recurse, line('.'), ' ')
+                exec substitute(g:proj_run_fold{a:number}, '%s', fnames, 'g')
+            endif
+        endif
     endfunction
     ">>>------------------------------------------------------------------
 
@@ -880,18 +1027,23 @@ function! s:Project(filename) " <<<
         nnoremap <buffer> <silent> <Return>   \|:call <SID>DoFoldOrOpenEntry('', 'e', 'bu')<CR>
         nnoremap <buffer> <silent> <S-Return> \|:call <SID>DoFoldOrOpenEntry('', 'sp', 'sbu')<CR>
         nnoremap <buffer> <silent> <C-Return> \|:call <SID>DoFoldOrOpenEntry('silent! only', 'e', 'bu')<CR>
-        nmap     <buffer> <silent> <Leader>s <S-Return>
-        nmap     <buffer> <silent> <Leader>o <C-Return>
-        nmap     <buffer> <silent> <Leader>i :call <SID>MyInheritedStatusline()<CR>
+        nmap     <buffer> <silent> <LocalLeader>s <S-Return>
+        nmap     <buffer> <silent> <LocalLeader>o <C-Return>
+        nmap     <buffer> <silent> <LocalLeader>i :echo <SID>RecursivelyConstructDirectives(line('.'))<CR>
         nmap     <buffer> <silent> <M-CR> <Return><C-W>p
-        nmap     <buffer> <silent> <Leader>v <M-CR>
-        " Double click
+        nmap     <buffer> <silent> <LocalLeader>v <M-CR>
+        nmap     <buffer> <silent> <LocalLeader>l \|:call <SID>LoadAll(0, line('.'))<CR>
+        nmap     <buffer> <silent> <LocalLeader>L \|:call <SID>LoadAll(1, line('.'))<CR>
+        nmap     <buffer> <silent> <LocalLeader>w \|:silent call <SID>WipeAll(0, line('.'))<CR>
+        nmap     <buffer> <silent> <LocalLeader>W \|:silent call <SID>WipeAll(1, line('.'))<CR>
+        nmap     <buffer> <silent> <LocalLeader>g \|:call <SID>GrepAll(0, line('.'), "")<CR>
+        nmap     <buffer> <silent> <LocalLeader>G \|:call <SID>GrepAll(1, line('.'), "")<CR>
         nnoremap <buffer> <silent> <2-LeftMouse>   \|:call <SID>DoFoldOrOpenEntry('', 'e', 'bu')<CR>
         nnoremap <buffer> <silent> <S-2-LeftMouse> \|:call <SID>DoFoldOrOpenEntry('', 'sp', 'sbu')<CR>
+        nnoremap <buffer> <silent> <M-2-LeftMouse> <M-CR>
         nnoremap <buffer> <silent> <S-LeftMouse>   <LeftMouse>
         nmap     <buffer> <silent> <C-2-LeftMouse> <C-Return>
         nnoremap <buffer> <silent> <C-LeftMouse>   <LeftMouse>
-        " Triple click does nothing (Tries to keep cursor at column 0, though.)
         nnoremap <buffer> <silent> <3-LeftMouse>  \|
         nmap     <buffer> <silent> <RightMouse>   <space>
         nmap     <buffer> <silent> <2-RightMouse> <space>
@@ -900,38 +1052,32 @@ function! s:Project(filename) " <<<
         nnoremap <buffer> <silent> <space>  \|:silent exec 'vertical resize '.(match(g:proj_flags, '\Ct')!=-1 && winwidth('.') > g:proj_window_width?(g:proj_window_width):(winwidth('.') + g:proj_window_increment))<CR>
         nnoremap <buffer> <silent> <C-Up>   \|:silent call <SID>MoveUp()<CR>
         nnoremap <buffer> <silent> <C-Down> \|:silent call <SID>MoveDown()<CR>
-        nmap     <buffer> <silent> <Leader><Up> <C-Up>
-        nmap     <buffer> <silent> <Leader><Down> <C-Down>
-        nmap     <buffer>          <Leader>1 \|:call <SID>Spawn(1)<CR>
-        nmap     <buffer>          <Leader>2 \|:call <SID>Spawn(2)<CR>
-        nmap     <buffer>          <Leader>3 \|:call <SID>Spawn(3)<CR>
-        nmap     <buffer>          <Leader>4 \|:call <SID>Spawn(4)<CR>
-        nmap     <buffer>          <Leader>5 \|:call <SID>Spawn(5)<CR>
-        nmap     <buffer>          <Leader>6 \|:call <SID>Spawn(6)<CR>
-        nmap     <buffer>          <Leader>7 \|:call <SID>Spawn(7)<CR>
-        nmap     <buffer>          <Leader>8 \|:call <SID>Spawn(8)<CR>
-        nmap     <buffer>          <Leader>9 \|:call <SID>Spawn(9)<CR>
-        nmap     <buffer>          <Leader>0 \|:call <SID>ListSpawn()<CR>
-
-        nnoremap <buffer> <silent> <Leader>c :call <SID>CreateEntriesFromDir()<CR>
-        nnoremap <buffer> <silent> <Leader>r :call <SID>RefreshEntriesFromDir(0)<CR>
-        nnoremap <buffer> <silent> <Leader>R :call <SID>RefreshEntriesFromDir(1)<CR>
-
+        nmap     <buffer> <silent> <LocalLeader><Up> <C-Up>
+        nmap     <buffer> <silent> <LocalLeader><Down> <C-Down>
+        let k=1
+        while k < 10
+            exec 'nmap <buffer> <LocalLeader>'.k.'  \|:call <SID>Spawn('.k.')<CR>'
+            exec 'nmap <buffer> <LocalLeader>f'.k.' \|:call <SID>SpawnAll(0, '.k.')<CR>'
+            exec 'nmap <buffer> <LocalLeader>F'.k.' \|:call <SID>SpawnAll(1, '.k.')<CR>'
+            let k=k+1
+        endwhile
+        nmap     <buffer>          <LocalLeader>0 \|:call <SID>ListSpawn("")<CR>
+        nmap     <buffer>          <LocalLeader>f0 \|:call <SID>ListSpawn("_fold")<CR>
+        nmap     <buffer>          <LocalLeader>F0 \|:call <SID>ListSpawn("_fold")<CR>
+        nnoremap <buffer> <silent> <LocalLeader>c :call <SID>CreateEntriesFromDir()<CR>
+        nnoremap <buffer> <silent> <LocalLeader>r :call <SID>RefreshEntriesFromDir(0)<CR>
+        nnoremap <buffer> <silent> <LocalLeader>R :call <SID>RefreshEntriesFromDir(1)<CR>
         " The :help command stomps on the Project Window.  Try to avoid that.
         " This is not perfect, but it is alot better than without the
         " mappings.
         cnoremap <buffer> help let g:proj_doinghelp = 1<CR>:help
         nnoremap <buffer> <F1> :let g:proj_doinghelp = 1<CR><F1>
-
-        " This is to help avoid changing the current buffer, but it is not
-        " fool-proof.
+        " This is to avoid changing the buffer, but it is not fool-proof.
         nnoremap <buffer> <silent> <C-^> \|
-
         if match(g:proj_flags, '\Cm') != -1
             nnoremap <silent> <C-W>o :let lzsave=&lz<CR>:set lz<CR><C-W>o:Project<CR>:silent! wincmd p<CR>:let &lz=lzsave<CR>:unlet lzsave<CR>
             nmap     <silent> <C-W><C-O> <C-W>o
-        endif
-        " >>>
+        endif " >>>
         " Autocommands <<<
         " Autocommands to clean up if we do a buffer wipe
         " These don't work unless we substitute \ for / for Windows
@@ -942,7 +1088,6 @@ function! s:Project(filename) " <<<
         exec 'au WinEnter,WinLeave '.bufname.' call s:DoEnsurePlacementSize_au()'
         exec 'au BufWinEnter '.bufname.' call s:DoSetupAndSplit_au()'
         " >>>
-        "
         setlocal buflisted
         let g:proj_running = bufnr(bufname)
         if g:proj_running == -1
