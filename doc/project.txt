@@ -1,0 +1,394 @@
+*project.txt*	Plugin for navigating multiple projects with multiple sources
+		For Vim version 6.0.
+		Last Change: Wed 03 Oct 2001 11:30:52 AM EDT
+	
+
+				By Aric Blumer
+			   Aric.Blumer@marconi.com
+
+						    *project* *project-plugin*
+
+This plugin allows you to set up a list of frequently-accessed files for easy
+navigation. The list of files will be displayed in a window on the left side
+of the Vim window, and you can press <Return> or double-click on filenames in
+the list to open the files. You can also specify to the Plugin what directory
+to change to when you select a file and have the Plugin run scripts when you
+edit the file to, for example, modify the environment to include compilers in
+$PATH. I find this easier to use than having to navigate a directory hierarchy
+with the |file-explorer|, and it also makes it very easy to use quickfix with
+multiple projects that use different environments. It is also easy to use with
+the keyboard (which is how I primarily use it).
+
+You must set 'nocompatible' in your |vimrc| file to use this plugin.  You can
+stop the plugin from being loaded by setting the "loaded_project" variable: >
+	:let loaded_project = 1
+
+
+==============================================================================
+COMMANDS						    *project-invoking*
+
+You can use the plugin by placing it in your plugin directory (e.g.,
+~/.vim/plugin). See |add-global-plugin|. When you start vim the next time, you
+then enter the command >
+    :Project
+or >
+    :Project {file}
+
+If you do not specify the filename, $HOME/.vimprojects is used.
+
+To have Vim come up with the Project Window enabled automatically (say, from a
+GUI launcher), run Vim like this:  [g]vim +Project
+
+Note that you can invoke :Project on only one file at a time.  If you wish to
+change the Project File, do a :bwipe in the Project Buffer, then re-invoke the
+Plugin as described above.
+
+Several projects can be kept and displayed in the same file, each in a fold
+delimited by { and } (see |fold.txt|).  There can be any number of nested
+folds to provide you with a project hierarchy.  Any line without a { or a } in
+the file is considered to be a filename.  Blank lines are ignored, and any
+text after a # is ignored.
+
+Because the plugin uses standard Vim folds, you can use any of the
+|fold-commands|. You can double-click on the first line of a fold to open and
+close it. You can select a file to open by putting the cursor on its name and
+pressing <Return> or by double-clicking on it.  The plugin will create a new
+window to the right or use the |CTRL-W_p| equivalent if it exists.
+
+							      *project-syntax*
+Each Project Entry has this form:
+
+project_entry ::=
+    <Description>={projpath} [{options}] {
+	[ filename ]
+	[ project_entry ]
+    }
+
+{options} is one or more of the following (on the same line):
+    CD={path}
+    in={filename}
+    out={filename}
+    filter="{pat}"
+    flags={flag}
+
+Note that a project_entry can reside within a project_entry. This allows you
+to set up a hierarchy within your project.
+
+The <Description> will be displayed in the foldtext and cannot contain "=".
+There can be no space character directly on either side of the =.
+
+The {projpath} is the path in which the files listed in the project's fold
+will be found.  If the path is a relative path, then the plugin constructs the
+whole path from the project's parent, grandparent, etc., all the way up the
+hierarchy. An outermost project_entry must have an absolute path.  See the
+|project-inheritance| example below.
+
+CD= provides the directory that Vim will change to when you select a file in
+that fold (using |:cd|). This allows you, for example, to enter |:make| to use
+the local Makefile.  A CD=. means that Vim will make {projpath} or its
+inherited equivalent the current working directory.  When CD is omitted, the
+directory is not changed.  There can be no space on either side of the =.  The
+value of CD can also be a relative path from a parent's CD.  See the
+|project-inheritance| example below.
+
+in= and out= provide the means to run arbitrary Vim scripts that whenever you
+enter or leave the buffer (see the |BufEnter| and |BufLeave| autocommand
+events).  The idea is to have a Vim script that sets up or tears down the
+environment for the project like this:
+
+in: >
+	let $PROJECT_HOME='~/my_project'
+	" Put the compiler in $PATH
+	if $PATH !~ '/path/to/my/compiler'
+		let $PATH=$PATH.':/path/to/my/compiler'
+	endif
+
+out: >
+	" Remove compiler from $PATH
+	if $PATH =~ '/path/to/my/compiler'
+		let $PATH=substitute($PATH, '/path/to/my/compiler', '', 'g')
+	endif
+
+Then you can use :make with the proper environment depending on what file you
+are currently editing.  If the path to the script is relative, then it is
+relative from {projpath}.  These directives are inherited by subprojects
+unless the subproject specifies its own.
+
+filter= specifies a |glob()| file pattern. It is used to regenerate the list
+of files in a project fold when using the \r (<Leader>r) map in the Project
+Window.  The filter value must be in quotes because it can contain multiple
+file patterns.  If filter is omitted, then the * pattern is used.  There can
+be no space on either side of the =.  A Subproject will inherit the filter of
+its parent unless it specifies its own filter.
+
+flags= provides the means to enable/disable features for a particular fold.
+The general mnemonic scheme is for lower case to turn something off and upper
+case to turn something on.  {flag} can contain any of the following
+characters:
+
+	r	Turn off refresh. When present, do not refresh this fold when
+		\r or \R is used.  This does not affect subfolds.
+
+	T	Turn on top gravity.  Forces folds to the top of the current
+		fold when refreshing. It has the same affect as the 'T' flag
+		in g:proj_flags, but controls the feature on a per-fold basis.
+
+	t	Turn off top gravity.  Forces folds to the bottom of the
+	        current fold when refreshing.
+
+
+Flags are not inherited by Subprojects.
+
+Any text outside a fold is ignored.
+
+
+==============================================================================
+INHERITANCE						 *project-inheritance*
+
+It's best to show inheritance by comparing these two Project Files:
+>
+	Parent=~/my_project CD=. filter="Make* *.mk" flags=r {
+	 Child1=c_code {
+	 }
+	 Child2=include CD=. filter="*.h" {
+	 }
+	}
+
+Child1's path is "~/my_project/c_code" because ~/my_project is inherited.  It
+also inherits the CD from Parent.  Since Parent has CD=., the Parent's cwd is
+"~/my_project".  Child1 therefore inherits a CD of "~/my_project".  Finally,
+Child1 inherits the filter from Parent. The flags are not inherited.
+
+Child2 only inherits the "~/my_project" from Parent.
+
+Thus, the example above is exactly equivalent to this:
+>
+	Parent=~/my_project CD=. filter="Make* *.mk" flags=r {
+	 Child1=~/my_project/c_code CD=~/my_project filter="Make* *.mk" {
+	 }
+	 Child2=~/my_project/include CD=~/my_project/include filter="*.h" {
+	 }
+	}
+
+(For a real project, Child1 would not want to inherit its parent's filter, but
+this example shows the concept.)
+
+
+==============================================================================
+MAPPINGS						    *project-mappings*
+
+\r	Refreshes the project fold that the cursor is in by placing in the
+	fold all the files that match the filter. The project is refreshed
+	using an indent of one space for every foldlevel in the hierarchy.
+	
+	Note that this mapping is actually <Leader>r, and the default of
+	|<Leader>| is \.
+
+\R	Executes \r recursively in the current fold and all folds below.
+
+\c	Creates a project fold entry.  It asks for the description, the path
+	to the files, and the filename |glob()| pattern.  From this
+	information, it will create the Project Entry below the cursor.  Note
+	that \c does not ask for the value of CD, but uses a default of
+	"CD=.".
+
+<Return>
+	Select a file to open in the |CTRL-W_p| window or in a new window.  If
+	the cursor is on a fold, open or close it.
+
+<S-Return>
+\s
+	Same as <Return> but horizontally split the target window. <Leader>s
+	is provided for those terminals that don't recognize <S-Return>.
+
+<C-Return>
+\o
+	Same as <Return> but ensure that the opened file is the only other
+	window. <Leader>o is provided for those terminals that don't recognize
+	<C-Return>.
+
+<M-Return>
+\v
+	Same as <Return> but only display the file--the cursor stays in the
+	Project Window.
+
+<2-LeftMouse>
+	(Double-click) If on a closed fold, open it. If on an open fold
+	boundary, close it. If on a filename, open the file in the |CTRL-W_p|
+	window or in a new window.
+
+<S-2-LeftMouse>
+	Same as <S-Return>.
+
+<C-2-LeftMouse>
+	Same as <C-Return>.
+
+<RightMouse>
+	Increase the width of the Project Window by g:proj_window_increment or
+	toggle between a width of
+		g:proj_window_width + g:proj_window_increment
+	and
+		g:proj_window_width.
+
+	Whether you toggle or monotonically increase the width is determined
+	by the 't' flag of the g:proj_flags variable (see |project-flags|).
+
+	Note that a Right Mouse click will not automatically place the cursor
+	in the Project Window if it is in a different window.  The window will
+	go back to the g:proj_window_width width when you leave the window.
+
+<space> Same as <RightMouse>
+
+<CTRL-Up>
+\<Up>
+	Move the text or fold under the cursor up one row. This may not work
+	in a terminal because the terminal is unaware of this key combination.
+	<Leader><Up> is provided for those terminals that don't recognize
+	<C-Up>.
+
+
+<CTRL-Down>
+\<Down>
+	Move the text or fold under the cursor down one row. This may not work
+	in a terminal because the terminal is unaware of this key combination.
+	<Leader><Down> is provided for those terminals that don't recognize
+	<C-Down>.
+
+\i	Show in the status line the completely resolved and inherited
+	parameters for the fold the cursor is in.  This is intended for
+	debugging your relative path and inherited parameters for manually
+	entered projects.
+
+Note that the Project Plugin remaps :help because the Help Window and the
+Project Window get into a fight over placement. The mapping avoids the
+problem.
+
+
+==============================================================================
+SETTINGS						    *project-settings*
+
+You can set these variables in your vimrc file before the plugin is loaded to
+change its default behavior
+
+g:proj_window_width
+	The width of the Project Window that the plugin attempts to maintain.
+	Default: 24
+
+	The Project Plugin is not always successful in keeping the window
+	where I want it with the size specified here, but it does a decent
+	job.
+
+g:proj_window_increment
+	The increment by which to increase the width of the Project Window
+	when pressing <space> or clicking the <LeftMouse>. Default: 100
+	(See |project-mappings|.)
+
+							       *project-flags*
+g:proj_flags
+	Default: "imst"
+	Various flags to control the behavior of the Project Plugin.  This
+	variable can contain any of the following character flags.
+
+	i	When present, display the filename and the current working
+		directory in the command line when a file is selected for
+		opening.
+
+	l	When present, the Project Plugin will use the |:lcd| command
+		rather than |:cd| to change directories when you select a file
+		to open.
+
+	L	Similar to l, but install a BufEnter/Leave |:autocommand| to
+		ensure that the current working directory is changed to the
+		one specified in the fold CD specification whenever that
+		buffer is active.  (|:lcd| only changes the CWD for a window,
+		not a buffer.)
+
+	m	Turn on mapping of the |CTRL-W_o| and |CTRL-W_CTRL_O| normal
+	        mode commands to make the current buffer the only visible
+		buffer, but keep the Project Window visible, too.
+
+	s	When present, the Project Plugin will use syntax highlighting
+		in the Project Window.
+
+	t	When present, toggle the size of the window rather than just
+		increase the size when pressing <space> or right-clicking.
+		See the entry for <RightMouse> in |project-mappings|.
+
+	T	When present, put Subproject folds at the top of the fold when
+		refreshing.
+
+
+==============================================================================
+PROJECT EXAMPLE FILE					     *project-example*
+
+Here is an example ~/.vimprojects file: >
+
+  1	My Project=~/c/project CD=. in=in.vim out=out.vim flags=r {
+  2	 Makefile
+  3      in.vim
+  4      out.vim
+  5	 GUI Files=. filter="gui*.c gui*.h" {
+  6	  gui_window.c
+  7	  gui_dialog.c
+  8	  gui_list.c
+  9	  gui.h	       # Header file
+ 10	 }
+ 11	 Database Files=. filter="data*.c data*.h" {
+ 12	  data_read.c
+ 13	  data_write.c
+ 14	  data.h
+ 15	 }
+ 16	 OS-Specific Files {
+ 17	  Win32=. filter="os_win32*.c os_win32*.h" {
+ 18	   os_win32_gui.c
+ 19	   os_win32_io.c
+ 20	  }
+ 21	  Unix=. filter="os_unix*.c os_unix*.h" {
+ 22	   os_unix_gui.c
+ 23	   os_unix_io.c
+ 24	  }
+ 25	 }
+ 26	}
+
+(Don't type in the line numbers, of course.)
+
+
+==============================================================================
+TIPS ON USING PROJECT PLUGIN					*project-tips*
+
+1.  You can create a Project Entry by entering this: >
+
+	Label=~/wherever CD=. filter="*.c *.h" {
+	}
+<
+    Then you can put the cursor in the fold and press \r. The script will fill
+    in the files (C files in this case) from this directory for you.  This is
+    equivalent to \c without any dialogs.
+
+2.  You can edit the project file at any time to add, remove, or reorder files
+    in the project list.
+
+3.  If the Project Window ever gets closed, you can just enter >
+	:Project
+<   or >
+	:Project {filename}
+<   to bring it back again.
+
+    If you have the 'm' flag set in g:proj_flags, then you get the Project
+    Window to show up again by pressing CTRL-W_o. This, of course, will close
+    any other windows that may be open.
+
+4.  Adding files to a project is very easy.  To add, for example, the 'more.c'
+    file to the project, just insert the filename in the Project Entry then
+    hit <Return> on it.
+
+==============================================================================
+THANKS
+
+	The following people have sent me patches to help with the Project
+	Plugin development:
+
+		Tomas Zellerin
+
+
+ vim:ts=8 sw=8 noexpandtab tw=78 ft=help:
