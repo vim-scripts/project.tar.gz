@@ -1,10 +1,11 @@
 "=============================================================================
 " File:        project.vim
-" Author:      Aric Blumer (Aric.Blumer at marconi.com)
-" Last Change: Thu 17 Oct 2002 02:39:48 PM EDT
-" Version:     1.3         ©2002
+" Author:      Aric Blumer (Aric.Blumer at aricvim@charter.net)
+" Last Change: Mon 24 Apr 2006 01:05:03 PM EDT
+" Version:     1.4
 "=============================================================================
 " See documentation in accompanying help file
+" You may use this code in whatever way you see fit.
 
 if exists('loaded_project') || &cp
   finish
@@ -42,9 +43,10 @@ function! s:Project(filename) " <<<
         exec 'silent vertical new '.filename
         silent! wincmd H
         exec 'vertical resize '.g:proj_window_width
+        setlocal nomodeline
     else
         silent! 99wincmd h
-        if winbufnr(2) == -1
+        if bufwinnr(g:proj_running) == -1
             vertical split
             let v:errmsg="nothing"
             silent! bnext
@@ -211,8 +213,10 @@ function! s:Project(filename) " <<<
             if bufnr('%') == g:proj_last_buffer | bnext | bprev | bnext | endif
             wincmd p " Go back to the Project Window and ensure it is the right width
         endif
-        silent! wincmd H
-        exec 'vertical resize '.g:proj_window_width
+        if(winnr() != 1)
+            silent! wincmd H
+            exec 'vertical resize '.g:proj_window_width
+        endif
     endfunction
     function! s:RecordPrevBuffer_au()
         let g:proj_last_buffer = bufnr('%')
@@ -381,6 +385,7 @@ function! s:Project(filename) " <<<
         if getline('.')=~'{\|}' || foldclosed('.') != -1
             normal! za
         else
+            call s:DoEnsurePlacementSize_au()
             call s:OpenEntry(line('.'), a:cmd0, a:cmd1, 0)
             if (match(g:proj_flags, '\Cc') != -1)
                 let g:proj_mywinnumber = winbufnr(0)
@@ -744,7 +749,7 @@ function! s:Project(filename) " <<<
     "   Ensure that the Project window is on the left of the window and has
     "   the correct size. Only called from an autocommand
     function! s:DoEnsurePlacementSize_au()
-        if winnr() != g:proj_running
+        if (winbufnr(0) != g:proj_running) || (winnr() != 1)
             if exists("g:proj_doinghelp")
                 if g:proj_doinghelp > 0
                     let g:proj_doinghelp = g:proj_doinghelp - 1
@@ -894,6 +899,28 @@ function! s:Project(filename) " <<<
         delfunction s:SpawnExec
         echon b:wipecount.' of '.b:totalcount." Files Wiped\r"
         unlet b:wipecount b:totalcount
+        if exists("b:stop_everything") | unlet b:stop_everything | endif
+    endfunction ">>>
+    " s:LoadAllSplit(recurse, line) <<<
+    "   Load all files in a project using split windows.
+    "   Contributed by A. Harrison
+    function! s:LoadAllSplit(recurse, line)
+        let b:loadcount=0
+        function! s:SpawnExec(infoline, fname, lineno, data)
+            let winNr = winnr() "get ProjectWindow number
+            if s:OpenEntry2(a:lineno, a:infoline, a:fname, 'sp')
+                exec winNr."wincmd w"
+                let b:loadcount=b:loadcount+1
+                echon b:loadcount."\r"
+                if getchar(0) != 0
+                    let b:stop_everything=1
+                endif
+            endif
+        endfunction
+        call Project_ForEach(a:recurse, line('.'), "*<SID>SpawnExec", 0, '^\(.*l\)\@!')
+        delfunction s:SpawnExec
+        echon b:loadcount." Files Loaded\r"
+        unlet b:loadcount
         if exists("b:stop_everything") | unlet b:stop_everything | endif
     endfunction ">>>
     " s:GrepAll(recurse, lineno, pattern) <<<
@@ -1112,7 +1139,7 @@ function! s:Project(filename) " <<<
         " s:DoProjectOnly(void) <<<
         "   Make the file window the only one.
         function! s:DoProjectOnly()
-            if winbufnr('.') != g:proj_running
+            if winbufnr(0) != g:proj_running
                 let lzsave=&lz
                 set lz
                 only
@@ -1129,6 +1156,7 @@ function! s:Project(filename) " <<<
         nnoremap <buffer> <silent> <S-Return> \|:call <SID>DoFoldOrOpenEntry('', 'sp')<CR>
         nnoremap <buffer> <silent> <C-Return> \|:call <SID>DoFoldOrOpenEntry('silent! only', 'e')<CR>
         nmap     <buffer> <silent> <LocalLeader>s <S-Return>
+        nnoremap <buffer> <silent> <LocalLeader>S \|:call <SID>LoadAllSplit(0, line('.'))<CR>
         nmap     <buffer> <silent> <LocalLeader>o <C-Return>
         nnoremap <buffer> <silent> <LocalLeader>i :echo <SID>RecursivelyConstructDirectives(line('.'))<CR>
         nnoremap <buffer> <silent> <LocalLeader>I :echo Project_GetFname(line('.'))<CR>

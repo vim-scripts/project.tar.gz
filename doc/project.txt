@@ -1,6 +1,6 @@
 *project.txt*	Plugin for managing multiple projects with multiple sources
 		For Vim version 6.0.
-		Last Change: Wed 16 Oct 2002 01:10:25 PM EDT
+		Last Change: Mon 24 Apr 2006 12:48:40 PM EDT
 	
 
 				By Aric Blumer
@@ -272,6 +272,9 @@ Map	Action ~
 	Same as <Return> but horizontally split the target window.
 	<LocalLeader>s is provided for those terminals that don't recognize
 	<S-Return>.
+
+\S
+	Load all files in a project by doing horizontal splits.
 
 <C-Return>
 \o
@@ -685,6 +688,7 @@ THANKS
 		Tomas Zellerin
 		Lawrence Kesteloot
 		Dave Eggum
+		A Harrison
 
 
  vim:ts=8 sw=8 noexpandtab tw=78 ft=help:
