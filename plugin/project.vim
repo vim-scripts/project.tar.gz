@@ -1,8 +1,8 @@
 "=============================================================================
 " File:        project.vim
 " Author:      Aric Blumer (Aric.Blumer at aricvim@charter.net)
-" Last Change: Mon 24 Apr 2006 01:05:03 PM EDT
-" Version:     1.4
+" Last Change: Fri 13 Oct 2006 09:47:08 AM EDT
+" Version:     1.4.1
 "=============================================================================
 " See documentation in accompanying help file
 " You may use this code in whatever way you see fit.
@@ -41,8 +41,10 @@ function! s:Project(filename) " <<<
     endif
     if !exists("g:proj_running") || (bufwinnr(g:proj_running) == -1) " Open the Project Window
         exec 'silent vertical new '.filename
-        silent! wincmd H
-        exec 'vertical resize '.g:proj_window_width
+        if match(g:proj_flags, '\CF') == -1      " We're floating
+            silent! wincmd H
+            exec 'vertical resize '.g:proj_window_width
+        endif
         setlocal nomodeline
     else
         silent! 99wincmd h
@@ -62,6 +64,13 @@ function! s:Project(filename) " <<<
         let b:proj_cd_cmd = 'lcd'
     endif
 
+    let b:proj_locate_command='silent! wincmd H'
+    let b:proj_resize_command='exec ''vertical resize ''.g:proj_window_width'
+    if match(g:proj_flags, '\CF') != -1         " Set the resize commands to nothing
+        let b:proj_locate_command=''
+        let b:proj_resize_command=''
+    endif
+
     let g:proj_last_buffer = -1
     ">>>
     " ProjFoldText() <<<
@@ -77,6 +86,9 @@ function! s:Project(filename) " <<<
         setlocal foldenable foldmethod=marker foldmarker={,} commentstring=%s foldcolumn=0 nonumber noswapfile shiftwidth=1
         setlocal foldtext=ProjFoldText() nobuflisted nowrap
         setlocal winwidth=1
+        if match(g:proj_flags, '\Cn') != -1
+            setlocal number
+        endif
     endfunction ">>>
     call s:DoSetup()
     " Syntax Stuff <<<
@@ -192,8 +204,8 @@ function! s:Project(filename) " <<<
                 exec 'silent vertical split | silent! bnext'
             endif
             wincmd p " Go back to the Project Window and ensure it is the right width
-            silent! wincmd H
-            exec 'vertical resize '.g:proj_window_width
+            exec b:proj_locate_command
+            exec b:proj_resize_command
             wincmd p
         endif
     endfunction ">>>
@@ -212,10 +224,11 @@ function! s:Project(filename) " <<<
             endif
             if bufnr('%') == g:proj_last_buffer | bnext | bprev | bnext | endif
             wincmd p " Go back to the Project Window and ensure it is the right width
-        endif
-        if(winnr() != 1)
-            silent! wincmd H
-            exec 'vertical resize '.g:proj_window_width
+            exec b:proj_locate_command
+            exec b:proj_resize_command
+        elseif(winnr() != 1)
+            exec b:proj_locate_command
+            exec b:proj_resize_command
         endif
     endfunction
     function! s:RecordPrevBuffer_au()
@@ -323,7 +336,7 @@ function! s:Project(filename) " <<<
     " s:OpenEntry2(line, infoline, precmd, editcmd) <<<
     "   Get the filename under the cursor, and open a window with it.
     function! s:OpenEntry2(line, infoline, fname, editcmd)
-        let fname=escape(a:fname, ' ')
+        let fname=escape(a:fname, ' %#')        " Thanks to Thomas Link for cluing me in on % and #
         let home=s:GetHome(a:infoline, '').'/'
         if home=='/'
             echoerr 'Project structure error. Check your syntax.'
@@ -389,13 +402,12 @@ function! s:Project(filename) " <<<
             call s:OpenEntry(line('.'), a:cmd0, a:cmd1, 0)
             if (match(g:proj_flags, '\Cc') != -1)
                 let g:proj_mywinnumber = winbufnr(0)
-                wincmd h
-                if(g:proj_running == winbufnr(0))
-                    hide
-                endif
+                Project
+                hide
                 if(g:proj_mywinnumber != winbufnr(0))
                     wincmd p
                 endif
+                wincmd =
             endif
         endif
     endfunction ">>>
@@ -427,8 +439,8 @@ function! s:Project(filename) " <<<
         let {a:filecount}=0
         let {a:dircount}=0
         while strlen(fnames) > 0
-            let fname = substitute(fnames,  '\(\(\f\|[ :]\)*\).*', '\1', '')
-            let fnames = substitute(fnames, '\(\f\|[ :]\)*.\(.*\)', '\2', '')
+            let fname = substitute(fnames,  '\(\(\f\|[ :\[\]]\)*\).*', '\1', '')
+            let fnames = substitute(fnames, '\(\f\|[ :\[\]]\)*.\(.*\)', '\2', '')
             if isdirectory(glob(fname))
                 let {a:dirvariable}={a:dirvariable}.a:padding.fname.a:separator
                 let {a:dircount}={a:dircount} + 1
@@ -671,7 +683,9 @@ function! s:Project(filename) " <<<
                 endif
                 call s:VimDirListing(filter, spaces, "\n", 'b:files', 'b:filecount', 'b:dirs', 'b:dircount')
                 if b:filecount > 0
+                    normal! mk
                     silent! put =b:files
+                    normal! `kj
                     if sort
                         call s:SortR(line('.'), line('.') + b:filecount - 1)
                     endif
@@ -758,9 +772,9 @@ function! s:Project(filename) " <<<
                 unlet g:proj_doinghelp
                 return
             endif
-            silent! wincmd H
+            exec b:proj_locate_command
         endif
-        exec 'vertical resize ' . g:proj_window_width
+        exec b:proj_resize_command
     endfunction ">>>
     " s:Spawn(number) <<<
     "   Spawn an external command on the file
@@ -937,16 +951,22 @@ function! s:Project(filename) " <<<
         unlet b:escape_spaces
         cclose " Make sure grep window is closed
         call s:DoSetupAndSplit()
-        silent! exec 'silent! grep '.pattern.' '.fnames
-        if v:shell_error != 0
-            echo 'GREP error. Perhaps there are too many filenames.'
+        if match(g:proj_flags, '\Cv') == -1
+            silent! exec 'silent! grep '.pattern.' '.fnames
+            if v:shell_error != 0
+                echo 'GREP error. Perhaps there are too many filenames.'
+            else
+                copen
+            endif
         else
+            silent! exec 'silent! vimgrep '.pattern.' '.fnames
             copen
         endif
     endfunction ">>>
     " GetXXX Functions <<<
     function! s:GetHome(info, parent_home)
-        let home=substitute(a:info, '^[^=]*=\(\(\\ \|\f\|:\)\+\).*', '\1', '')
+        " Thanks to Adam Montague for pointing out the need for @ in urls.
+        let home=substitute(a:info, '^[^=]*=\(\(\\ \|\f\|:\|@\)\+\).*', '\1', '')
         if strlen(home) == strlen(a:info)
             let home=substitute(a:info, '.\{-}"\(.\{-}\)".*', '\1', '')
             if strlen(home) != strlen(a:info) | let home=escape(home, ' ') | endif
@@ -1155,6 +1175,7 @@ function! s:Project(filename) " <<<
         nnoremap <buffer> <silent> <Return>   \|:call <SID>DoFoldOrOpenEntry('', 'e')<CR>
         nnoremap <buffer> <silent> <S-Return> \|:call <SID>DoFoldOrOpenEntry('', 'sp')<CR>
         nnoremap <buffer> <silent> <C-Return> \|:call <SID>DoFoldOrOpenEntry('silent! only', 'e')<CR>
+        nnoremap <buffer> <silent> <LocalLeader>T \|:call <SID>DoFoldOrOpenEntry('', 'tabe')<CR>
         nmap     <buffer> <silent> <LocalLeader>s <S-Return>
         nnoremap <buffer> <silent> <LocalLeader>S \|:call <SID>LoadAllSplit(0, line('.'))<CR>
         nmap     <buffer> <silent> <LocalLeader>o <C-Return>
@@ -1213,8 +1234,8 @@ function! s:Project(filename) " <<<
         nnoremap <script> <Plug>ProjectOnly :call <SID>DoProjectOnly()<CR>
         if match(g:proj_flags, '\Cm') != -1
             if !hasmapto('<Plug>ProjectOnly')
-                nmap <silent> <C-W>o <Plug>ProjectOnly
-                nmap <silent> <C-W><C-O> <C-W>o
+                nmap <silent> <unique> <C-W>o <Plug>ProjectOnly
+                nmap <silent> <unique> <C-W><C-O> <C-W>o
             endif
         endif " >>>
         if filereadable(glob('~/.vimproject_mappings')) | source ~/.vimproject_mappings | endif
@@ -1241,7 +1262,7 @@ function! s:Project(filename) " <<<
     endif
 endfunction " >>>
 
-if !exists(':Project')
+if exists(':Project') != 2
     command -nargs=? -complete=file Project call <SID>Project('<args>')
 endif
 " Toggle Mapping

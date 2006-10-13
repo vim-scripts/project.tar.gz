@@ -1,16 +1,16 @@
 *project.txt*	Plugin for managing multiple projects with multiple sources
-		For Vim version 6.0.
-		Last Change: Mon 24 Apr 2006 12:48:40 PM EDT
+		For Vim version 6.x and Vim version 7.x.
+		Last Change: Fri 13 Oct 2006 10:20:13 AM EDT
 	
 
 				By Aric Blumer
-			   Aric.Blumer@marconi.com
+		      aricvim email-at-sign charter.net
 
 						    *project* *project-plugin*
 	Contents:
 
 		Commands...................|project-invoking|
-		Inheritiance............|project-inheritance|
+		Inheritance.............|project-inheritance|
 		Mappings...................|project-mappings|
 		Adding Mappings.....|project-adding-mappings|
 		Settings...................|project-settings|
@@ -486,6 +486,22 @@ g:proj_flags
 
        flag	Description ~
 
+	b	When present, use the |browse()| when selecting directories
+		for \c and \C.  This is off by default for Windows, because
+		the windows browser does not allow you to select directories.
+
+	c	When present, the Project Window will automatically close when
+		you select a file.
+
+	F	Float the Project Window.  That is, turn off automatic
+		resizing and placement.  This allows placement between other
+		windows that wish to share similar placement at the side of
+		the screen.  It is also particularly helpful for external
+		window managers.
+
+	g	When present, the mapping for <F12> will be created to toggle
+		the Project Window open and closed.
+
 	i	When present, display the filename and the current working
 		directory in the command line when a file is selected for
 		opening.
@@ -505,6 +521,9 @@ g:proj_flags
 	        mode commands to make the current buffer the only visible
 		buffer, but keep the Project Window visible, too.
 
+	n	When present, numbers will be turned on for the project
+	        window.
+
 	s	When present, the Project Plugin will use syntax highlighting
 		in the Project Window.
 
@@ -517,15 +536,7 @@ g:proj_flags
 	T	When present, put Subproject folds at the top of the fold when
 		refreshing.
 
-	b	When present, use the |browse()| when selecting directories
-		for \c and \C.  This is off by default for Windows, because
-		the windows browser does not allow you to select directories.
-
-	c	When present, the Project Window will automatically close when
-		you select a file.
-
-	g	When present, the mapping for <F12> will be created to toggle
-		the Project Window open and closed.
+	v	When present, use :vimgrep rather than :grep when using \G.
 
 g:proj_run1 ...  g:proj_run9
 		Contains a Vim command to execute on the file.  See the
@@ -689,6 +700,11 @@ THANKS
 		Lawrence Kesteloot
 		Dave Eggum
 		A Harrison
+		Thomas Link
+		Richard Bair
+		Eric Arnold
+		Peter Jones
+		Eric Van Dewoestine
 
 
  vim:ts=8 sw=8 noexpandtab tw=78 ft=help:
